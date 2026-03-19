@@ -1,0 +1,74 @@
+{
+  "gateway": {
+    "mode": "local",
+    "port": 18789,
+    "bind": "lan",
+    "auth": {
+      "mode": "password"
+    },
+    "controlUi": {
+      "dangerouslyAllowHostHeaderOriginFallback": true
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": { "enabled": true }
+      }
+    },
+    "tools": {
+      "allow": ["sessions_send"]
+    },
+    "tailscale": {
+      "mode": "off"
+    }
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "/home/node/.openclaw/workspace"
+    }
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "plugins": {
+    "allow": ["memory-core", "guard-model"],
+    "slots": {
+      "memory": "memory-core"
+    },
+    "entries": {
+      "guard-model": {
+        "enabled": true,
+        "config": {
+          "enabled": true,
+          "model": "chutes/Qwen/Qwen3Guard-Gen-0.6B",
+          "logDecisions": true,
+          "policy": {
+            "parseMode": "json_or_safety_label",
+            "evaluationFailureAction": "allow",
+            "unknownSafetyLabelAction": "allow",
+            "allowLabels": ["safe", "controversial"],
+            "blockLabels": ["unsafe"],
+            "allowReasons": ["none", "politically sensitive topics", "copyright violation"],
+            "blockReasons": ["violent", "non-violent illegal acts", "pii", "jailbreak"]
+          },
+          "input": {
+            "enabled": true,
+            "payloadMode": "latest_user_message"
+          },
+          "output": {
+            "enabled": true
+          },
+          "refusalText": "Blocked by guard model."
+        }
+      }
+    }
+  },
+  "hooks": {
+    "internal": {
+      "enabled": true,
+      "entries": {
+        "boot-md": { "enabled": true },
+        "bootstrap-extra-files": { "enabled": true }
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+# Shared network: created by trishool/docker-up.sh; both tri-claw and tri-judge use it as external.
+networks:
+  tri-shared:
+    name: tri-shared
+    external: true
+
+services:
+  tri-judge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      JUDGE_CONFIG_PATH: /app/docker/judge.lean.json
+    volumes:
+      - ./docker/judge.lean.json:/app/docker/judge.lean.json:ro
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    networks:
+      - tri-shared

@@ -1,0 +1,6 @@
+# run-eval secrets (copy .env.example to .env)
+.env
+main.env
+
+# eval output / artifacts
+eval

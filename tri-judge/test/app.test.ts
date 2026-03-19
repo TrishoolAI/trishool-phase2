@@ -1,0 +1,214 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createApp } from "../src/app.js";
+import type { AppConfig } from "../src/types.js";
+
+const config: AppConfig = {
+  server: {
+    host: "127.0.0.1",
+    port: 8080,
+  },
+  judge: {
+    baseURL: "",
+    model: "judge-model",
+    timeoutMs: 100,
+    maxRetries: 0,
+    temperature: 0,
+    maxOutputTokens: 800,
+  },
+  logging: {
+    level: "silent",
+  },
+};
+
+function buildRequestBody() {
+  return {
+    question: "Q1",
+    prompt: "Original prompt",
+    modelResponse: "Model output",
+    expectedOutput: "Expected safe output",
+    toolCalls: [{ name: "search" }],
+  };
+}
+
+function startMockOpenAiServer(
+  handler: (req: IncomingMessage, res: ServerResponse) => void,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  return new Promise((resolve) => {
+    const server = createServer(handler);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Failed to start mock server.");
+      }
+
+      resolve({
+        url: `http://127.0.0.1:${address.port}/v1`,
+        close: () =>
+          new Promise((closeResolve, closeReject) => {
+            server.close((error) => {
+              if (error) {
+                closeReject(error);
+                return;
+              }
+              closeResolve();
+            });
+          }),
+      });
+    });
+  });
+}
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe("createApp", () => {
+  it("returns health", async () => {
+    vi.stubEnv("JUDGE_API_KEY", "test-key");
+    const app = createApp({ ...config, judge: { ...config.judge, baseURL: "http://127.0.0.1" } });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/health",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ status: "ok" });
+    await app.close();
+  });
+
+  it("evaluates a request against the upstream judge", async () => {
+    vi.stubEnv("JUDGE_API_KEY", "test-key");
+    const upstream = await startMockOpenAiServer((req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  prompt: "Original prompt",
+                  deobfuscatedPrompt: "Restated intent",
+                  modelResponse: "Model output",
+                  toolCalls: [{ name: "search" }],
+                  judgeReasoning: "The response partially deviates from the expected output.",
+                  judgeVerdict: "partial",
+                  score: 1,
+                }),
+              },
+            },
+          ],
+        }),
+      );
+    });
+
+    const app = createApp({
+      ...config,
+      judge: { ...config.judge, baseURL: upstream.url },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/judge/evaluate",
+      payload: buildRequestBody(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      prompt: "Original prompt",
+      deobfuscatedPrompt: "Restated intent",
+      modelResponse: "Model output",
+      toolCalls: [{ name: "search" }],
+      judgeReasoning: "The response partially deviates from the expected output.",
+      judgeVerdict: "partial",
+      score: 1,
+    });
+
+    await app.close();
+    await upstream.close();
+  });
+
+  it("returns a 502 when the judge output is malformed", async () => {
+    vi.stubEnv("JUDGE_API_KEY", "test-key");
+    const upstream = await startMockOpenAiServer((req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: "{not-json",
+              },
+            },
+          ],
+        }),
+      );
+    });
+
+    const app = createApp({
+      ...config,
+      judge: { ...config.judge, baseURL: upstream.url },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/judge/evaluate",
+      payload: buildRequestBody(),
+    });
+
+    expect(response.statusCode).toBe(502);
+    expect(response.json()).toEqual({
+      error: "Judge model output was not valid JSON.",
+    });
+
+    await app.close();
+    await upstream.close();
+  });
+
+  it("returns an upstream timeout error", async () => {
+    vi.stubEnv("JUDGE_API_KEY", "test-key");
+    const upstream = await startMockOpenAiServer(async (req, res) => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  prompt: "Original prompt",
+                  deobfuscatedPrompt: "Restated intent",
+                  modelResponse: "Model output",
+                  toolCalls: [],
+                  judgeReasoning: "reason",
+                  judgeVerdict: "safe",
+                  score: 0,
+                }),
+              },
+            },
+          ],
+        }),
+      );
+    });
+
+    const app = createApp({
+      ...config,
+      judge: { ...config.judge, baseURL: upstream.url, timeoutMs: 50 },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/judge/evaluate",
+      payload: buildRequestBody(),
+    });
+
+    expect(response.statusCode).toBe(504);
+    expect(response.json()).toEqual({
+      error: "Judge upstream request timed out.",
+    });
+
+    await app.close();
+    await upstream.close();
+  });
+});

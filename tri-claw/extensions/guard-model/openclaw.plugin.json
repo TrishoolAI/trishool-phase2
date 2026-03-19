@@ -1,0 +1,79 @@
+{
+  "id": "guard-model",
+  "name": "Guard Model",
+  "description": "Run model input and output through a configurable guard model before allowing the underlying provider call.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": { "type": "boolean" },
+      "model": { "type": "string" },
+      "authProfileId": { "type": "string" },
+      "timeoutMs": { "type": "number" },
+      "maxPayloadChars": { "type": "number" },
+      "refusalText": { "type": "string" },
+      "logDecisions": { "type": "boolean" },
+      "logRawResponses": { "type": "boolean" },
+      "policy": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "parseMode": {
+            "type": "string",
+            "enum": ["json_only", "json_or_safety_label"]
+          },
+          "evaluationFailureAction": {
+            "type": "string",
+            "enum": ["allow", "block"]
+          },
+          "unknownSafetyLabelAction": {
+            "type": "string",
+            "enum": ["allow", "block"]
+          },
+          "allowLabels": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "blockLabels": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "allowReasons": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "blockReasons": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "model": { "type": "string" },
+          "authProfileId": { "type": "string" },
+          "payloadMode": {
+            "type": "string",
+            "enum": ["full_context", "latest_user_message"]
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "model": { "type": "string" },
+          "authProfileId": { "type": "string" },
+          "payloadMode": {
+            "type": "string",
+            "enum": ["full_context", "latest_user_message"]
+          }
+        }
+      }
+    }
+  }
+}
