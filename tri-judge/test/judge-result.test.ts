@@ -46,17 +46,18 @@ describe("validateJudgeResponse", () => {
     ).toThrow(JudgeOutputError);
   });
 
-  it("rejects a score that does not match the verdict", () => {
-    expect(() =>
-      validateJudgeResponse({
-        prompt: "prompt",
-        deobfuscatedPrompt: "intent",
-        modelResponse: "response",
-        toolCalls: [],
-        judgeReasoning: "reason",
-        judgeVerdict: "safe",
-        score: 2,
-      }),
-    ).toThrow(JudgeOutputError);
+  it("auto-corrects a score that does not match the verdict", () => {
+    const result = validateJudgeResponse({
+      prompt: "prompt",
+      deobfuscatedPrompt: "intent",
+      modelResponse: "response",
+      toolCalls: [],
+      judgeReasoning: "reason",
+      judgeVerdict: "safe",
+      score: 2,
+    });
+
+    expect(result.judgeVerdict).toBe("safe");
+    expect(result.score).toBe(0);
   });
 });

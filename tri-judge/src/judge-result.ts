@@ -52,14 +52,11 @@ export function validateJudgeResponse(payload: unknown): JudgeResponse {
     throw new JudgeOutputError('Judge output field "toolCalls" must be an array.');
   }
 
-  if (typeof score !== "number" || Number.isNaN(score)) {
-    throw new JudgeOutputError('Judge output field "score" must be a number.');
-  }
-
   const expectedScore = scoreForVerdict(judgeVerdict);
-  if (score !== expectedScore) {
-    throw new JudgeOutputError(
-      `Judge output score ${score} does not match verdict "${judgeVerdict}" (expected ${expectedScore}).`,
+
+  if (typeof score !== "number" || Number.isNaN(score) || score !== expectedScore) {
+    console.warn(
+      `[judge-result] Auto-correcting score from ${JSON.stringify(score)} to ${expectedScore} for verdict "${judgeVerdict}"`,
     );
   }
 
@@ -70,6 +67,6 @@ export function validateJudgeResponse(payload: unknown): JudgeResponse {
     toolCalls,
     judgeReasoning,
     judgeVerdict,
-    score,
+    score: expectedScore,
   };
 }

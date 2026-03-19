@@ -9,7 +9,7 @@
     "timeoutMs": 30000,
     "maxRetries": 2,
     "temperature": 0,
-    "maxOutputTokens": 800
+    "maxOutputTokens": 16384
   },
   "logging": {
     "level": "info"
