@@ -8,13 +8,18 @@ EXTRA_COMPOSE_FILE="$ROOT_DIR/docker-compose.extra.yml"
 IMAGE_NAME="${OPENCLAW_IMAGE:-openclaw:local}"
 DOCKERFILE="$ROOT_DIR/Dockerfile"
 LEAN_MODE=false
+FORCE_BUILD=false
 for arg in "$@"; do
-  if [[ "$arg" == "--lean" ]]; then
-    LEAN_MODE=true
-    IMAGE_NAME="${OPENCLAW_IMAGE:-openclaw:lean}"
-    DOCKERFILE="$ROOT_DIR/Dockerfile.lean"
-    break
-  fi
+  case "$arg" in
+    --lean)
+      LEAN_MODE=true
+      IMAGE_NAME="${OPENCLAW_IMAGE:-openclaw:lean}"
+      DOCKERFILE="$ROOT_DIR/Dockerfile.lean"
+      ;;
+    --build)
+      FORCE_BUILD=true
+      ;;
+  esac
 done
 EXTRA_MOUNTS="${OPENCLAW_EXTRA_MOUNTS:-}"
 HOME_VOLUME_NAME="${OPENCLAW_HOME_VOLUME:-}"
@@ -235,13 +240,28 @@ done
 
 # Never update .env; all required vars must be in .env or exported before running.
 
-if [[ "$IMAGE_NAME" == "openclaw:local" || "$IMAGE_NAME" == "openclaw:lean" ]]; then
+build_image() {
   echo "==> Building Docker image: $IMAGE_NAME"
   docker build \
     --build-arg "OPENCLAW_DOCKER_APT_PACKAGES=${OPENCLAW_DOCKER_APT_PACKAGES}" \
     -t "$IMAGE_NAME" \
     -f "$DOCKERFILE" \
     "$ROOT_DIR"
+}
+
+image_exists() {
+  docker image inspect "$IMAGE_NAME" >/dev/null 2>&1
+}
+
+if [[ "$IMAGE_NAME" == "openclaw:local" || "$IMAGE_NAME" == "openclaw:lean" ]]; then
+  if [[ "$FORCE_BUILD" == "true" ]]; then
+    build_image
+  elif ! image_exists; then
+    echo "==> Image $IMAGE_NAME not found — building automatically (pass --build to force rebuild)"
+    build_image
+  else
+    echo "==> Image $IMAGE_NAME already exists — skipping build (pass --build to force rebuild)"
+  fi
 else
   echo "==> Pulling Docker image: $IMAGE_NAME"
   if ! docker pull "$IMAGE_NAME"; then
@@ -252,33 +272,20 @@ fi
 
 echo ""
 if [[ "$LEAN_MODE" == "true" ]]; then
-  LEAN_USE_VOLUMES=false
-  [[ -n "$HOME_VOLUME_NAME" || ${#VALID_MOUNTS[@]} -gt 0 ]] && LEAN_USE_VOLUMES=true
+  echo "==> Lean mode: config + setup baked into image via openclaw.lean.json"
 
-  if [[ "$LEAN_USE_VOLUMES" == "true" ]]; then
-    # Config-as-mount: use canonical lean config when using host volumes.
+  if [[ -n "$HOME_VOLUME_NAME" || ${#VALID_MOUNTS[@]} -gt 0 ]]; then
     LEAN_CONFIG_TEMPLATE="$ROOT_DIR/docker/openclaw.lean.json"
     OPENCLAW_JSON="$OPENCLAW_CONFIG_DIR/openclaw.json"
     if [[ ! -f "$OPENCLAW_JSON" ]]; then
-      echo "==> Copying lean config template (config-as-mount)"
+      echo "==> Copying lean config template to host volume"
       if [[ ! -f "$LEAN_CONFIG_TEMPLATE" ]]; then
         fail "Lean config template not found at $LEAN_CONFIG_TEMPLATE"
       fi
       cp "$LEAN_CONFIG_TEMPLATE" "$OPENCLAW_JSON"
-    else
-      echo "==> Config exists at $OPENCLAW_JSON (skipping template copy)"
     fi
-
-    echo "==> Setting up workspace"
-    docker compose "${COMPOSE_ARGS[@]}" run --rm \
-      -e OPENCLAW_GATEWAY_PASSWORD="${OPENCLAW_GATEWAY_PASSWORD:-}" \
-      -e CHUTES_API_KEY="${CHUTES_API_KEY:-}" \
-      openclaw-gateway node dist/index.js setup
-  else
-    echo "==> Lean mode (no volumes): config and workspace baked into image"
   fi
 
-  # Print Chutes config for debug (API key omitted)
   echo "==> Chutes config"
   echo "  CHUTES_BASE_URL: ${CHUTES_BASE_URL:-<default: https://llm.chutes.ai/v1>}"
   echo "  CHUTES_DEFAULT_MODEL_ID: ${CHUTES_DEFAULT_MODEL_ID:-<default: zai-org/GLM-4.7-TEE>}"
