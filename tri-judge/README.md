@@ -53,6 +53,10 @@ npm run dev
 
 ## Docker
 
+When using the parent repo’s [`docker-up.sh`](../docker-up.sh), secrets live next to it: copy [`../.env.tri-judge.example`](../.env.tri-judge.example) to `../.env.tri-judge` (and optionally shared `../.env`). Compose mounts those via `env_file` in `docker-compose.yml`.
+
+Standalone from this directory:
+
 ```bash
 docker compose up --build
 ```

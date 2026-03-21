@@ -8,13 +8,18 @@ EXTRA_COMPOSE_FILE="$ROOT_DIR/docker-compose.extra.yml"
 IMAGE_NAME="${OPENCLAW_IMAGE:-openclaw:local}"
 DOCKERFILE="$ROOT_DIR/Dockerfile"
 LEAN_MODE=false
+FORCE_BUILD=false
 for arg in "$@"; do
-  if [[ "$arg" == "--lean" ]]; then
-    LEAN_MODE=true
-    IMAGE_NAME="${OPENCLAW_IMAGE:-openclaw:lean}"
-    DOCKERFILE="$ROOT_DIR/Dockerfile.lean"
-    break
-  fi
+  case "$arg" in
+    --lean)
+      LEAN_MODE=true
+      IMAGE_NAME="${OPENCLAW_IMAGE:-openclaw:lean}"
+      DOCKERFILE="$ROOT_DIR/Dockerfile.lean"
+      ;;
+    --build)
+      FORCE_BUILD=true
+      ;;
+  esac
 done
 EXTRA_MOUNTS="${OPENCLAW_EXTRA_MOUNTS:-}"
 HOME_VOLUME_NAME="${OPENCLAW_HOME_VOLUME:-}"
@@ -97,8 +102,29 @@ mkdir -p "$OPENCLAW_WORKSPACE_DIR"
 # that reject creating new subdirectories from inside the container.
 mkdir -p "$OPENCLAW_CONFIG_DIR/identity"
 
-# Load .env for reading only (never overwrite; never write back)
-if [[ -f "$ROOT_DIR/.env" ]]; then
+TRISHOOL_ROOT="$(cd "$ROOT_DIR/.." && pwd)"
+# shellcheck source=../scripts/ensure-trishool-env.sh
+source "$TRISHOOL_ROOT/scripts/ensure-trishool-env.sh"
+ensure_trishool_root_env "$TRISHOOL_ROOT"
+
+# Load repo-root env for compose interpolation (never write files back).
+# Precedence: vars exported before this script win; then .env.tri-claw overrides .env for same keys.
+mapfile -t _TRISHOOL_INITIAL_EXPORTS < <(compgen -e || true)
+
+_was_exported_before_trishool_env_load() {
+  local k="$1"
+  local e
+  for e in "${_TRISHOOL_INITIAL_EXPORTS[@]}"; do
+    [[ "$e" == "$k" ]] && return 0
+  done
+  return 1
+}
+
+_load_trishool_env_file() {
+  local file="$1"
+  local mode="$2"
+  [[ -f "$file" ]] || return 0
+  local line key value
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" =~ ^[[:space:]]*# ]] && continue
     [[ "$line" =~ ^[[:space:]]*$ ]] && continue
@@ -106,14 +132,23 @@ if [[ -f "$ROOT_DIR/.env" ]]; then
     key="${key% }"
     key="${key#"${key%%[![:space:]]*}"}"
     [[ -z "$key" ]] && continue
-    # Only set if not already in environment
-    if [[ -z "${!key+x}" ]]; then
-      value="${line#*=}"
-      value="${value#"${value%%[![:space:]]*}"}"
+    value="${line#*=}"
+    value="${value#"${value%%[![:space:]]*}"}"
+    if [[ "$mode" == "unset_only" ]]; then
+      if [[ -z "${!key+x}" ]]; then
+        export "$key=$value"
+      fi
+    else
+      if _was_exported_before_trishool_env_load "$key"; then
+        continue
+      fi
       export "$key=$value"
     fi
-  done <"$ROOT_DIR/.env"
-fi
+  done <"$file"
+}
+
+_load_trishool_env_file "$TRISHOOL_ROOT/.env" unset_only
+_load_trishool_env_file "$TRISHOOL_ROOT/.env.tri-claw" override_repo
 
 export OPENCLAW_CONFIG_DIR
 export OPENCLAW_WORKSPACE_DIR
@@ -132,11 +167,11 @@ export OPENCLAW_HOME_VOLUME="$HOME_VOLUME_NAME"
 
 if [[ "$LEAN_MODE" == "true" ]]; then
   if [[ -z "${OPENCLAW_GATEWAY_PASSWORD:-}" ]]; then
-    fail "OPENCLAW_GATEWAY_PASSWORD must be set for lean mode. Add OPENCLAW_GATEWAY_PASSWORD=your-password to your .env file (in repo root) or export it before running."
+    fail "OPENCLAW_GATEWAY_PASSWORD must be set for lean mode. Add it to trishool/.env.tri-claw (or .env) or export it before running."
   fi
 else
   if [[ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]]; then
-    fail "OPENCLAW_GATEWAY_TOKEN must be set. Add OPENCLAW_GATEWAY_TOKEN=your-token to your .env file (in repo root) or export it before running."
+    fail "OPENCLAW_GATEWAY_TOKEN must be set. Add it to trishool/.env.tri-claw (or .env) or export it before running."
   fi
 fi
 export OPENCLAW_GATEWAY_TOKEN
@@ -233,15 +268,30 @@ for compose_file in "${COMPOSE_FILES[@]}"; do
   COMPOSE_HINT+=" -f ${compose_file}"
 done
 
-# Never update .env; all required vars must be in .env or exported before running.
+# Never update env files; required vars must be in trishool/.env / .env.tri-claw or exported before running.
 
-if [[ "$IMAGE_NAME" == "openclaw:local" || "$IMAGE_NAME" == "openclaw:lean" ]]; then
+build_image() {
   echo "==> Building Docker image: $IMAGE_NAME"
   docker build \
     --build-arg "OPENCLAW_DOCKER_APT_PACKAGES=${OPENCLAW_DOCKER_APT_PACKAGES}" \
     -t "$IMAGE_NAME" \
     -f "$DOCKERFILE" \
     "$ROOT_DIR"
+}
+
+image_exists() {
+  docker image inspect "$IMAGE_NAME" >/dev/null 2>&1
+}
+
+if [[ "$IMAGE_NAME" == "openclaw:local" || "$IMAGE_NAME" == "openclaw:lean" ]]; then
+  if [[ "$FORCE_BUILD" == "true" ]]; then
+    build_image
+  elif ! image_exists; then
+    echo "==> Image $IMAGE_NAME not found — building automatically (pass --build to force rebuild)"
+    build_image
+  else
+    echo "==> Image $IMAGE_NAME already exists — skipping build (pass --build to force rebuild)"
+  fi
 else
   echo "==> Pulling Docker image: $IMAGE_NAME"
   if ! docker pull "$IMAGE_NAME"; then
@@ -252,33 +302,20 @@ fi
 
 echo ""
 if [[ "$LEAN_MODE" == "true" ]]; then
-  LEAN_USE_VOLUMES=false
-  [[ -n "$HOME_VOLUME_NAME" || ${#VALID_MOUNTS[@]} -gt 0 ]] && LEAN_USE_VOLUMES=true
+  echo "==> Lean mode: config + setup baked into image via openclaw.lean.json"
 
-  if [[ "$LEAN_USE_VOLUMES" == "true" ]]; then
-    # Config-as-mount: use canonical lean config when using host volumes.
+  if [[ -n "$HOME_VOLUME_NAME" || ${#VALID_MOUNTS[@]} -gt 0 ]]; then
     LEAN_CONFIG_TEMPLATE="$ROOT_DIR/docker/openclaw.lean.json"
     OPENCLAW_JSON="$OPENCLAW_CONFIG_DIR/openclaw.json"
     if [[ ! -f "$OPENCLAW_JSON" ]]; then
-      echo "==> Copying lean config template (config-as-mount)"
+      echo "==> Copying lean config template to host volume"
       if [[ ! -f "$LEAN_CONFIG_TEMPLATE" ]]; then
         fail "Lean config template not found at $LEAN_CONFIG_TEMPLATE"
       fi
       cp "$LEAN_CONFIG_TEMPLATE" "$OPENCLAW_JSON"
-    else
-      echo "==> Config exists at $OPENCLAW_JSON (skipping template copy)"
     fi
-
-    echo "==> Setting up workspace"
-    docker compose "${COMPOSE_ARGS[@]}" run --rm \
-      -e OPENCLAW_GATEWAY_PASSWORD="${OPENCLAW_GATEWAY_PASSWORD:-}" \
-      -e CHUTES_API_KEY="${CHUTES_API_KEY:-}" \
-      openclaw-gateway node dist/index.js setup
-  else
-    echo "==> Lean mode (no volumes): config and workspace baked into image"
   fi
 
-  # Print Chutes config for debug (API key omitted)
   echo "==> Chutes config"
   echo "  CHUTES_BASE_URL: ${CHUTES_BASE_URL:-<default: https://llm.chutes.ai/v1>}"
   echo "  CHUTES_DEFAULT_MODEL_ID: ${CHUTES_DEFAULT_MODEL_ID:-<default: zai-org/GLM-4.7-TEE>}"
