@@ -12,7 +12,7 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")  # Optional: GitHub token for higher ra
 
 # Trishool Subnet Repository Configuration
 TRISHOOL_REPO_OWNER = "TrishoolAI"
-TRISHOOL_REPO_NAME = "trishool-subnet-v2"
+TRISHOOL_REPO_NAME = "trishool-phase2"
 TRISHOOL_REPO_BRANCH = os.getenv("TRISHOOL_REPO_BRANCH", "main")  # Default to main branch
 TRISHOOL_REPO_URL = f"https://github.com/{TRISHOOL_REPO_OWNER}/{TRISHOOL_REPO_NAME}.git"
 TRISHOOL_COMMIT_CHECK_INTERVAL = int(os.getenv("TRISHOOL_COMMIT_CHECK_INTERVAL", "300"))  # 5 minutes default
@@ -25,6 +25,9 @@ GIT_PULL_RETRIES = 3
 PM2_APP_NAME = os.getenv("PM2_APP_NAME", "trishool-subnet")
 PM2_RESTART_TIMEOUT = 30  # seconds
 PM2_RESTART_RETRIES = 3
+
+# Docker tri-claw / tri-judge restart (docker-down.sh + docker-up.sh)
+DOCKER_AGENT_RESTART_TIMEOUT = int(os.getenv("DOCKER_AGENT_RESTART_TIMEOUT", "100"))  # seconds
 
 # Repository Local Path (for git pull)
 # Default to project root (3 levels up from alignet/validator/constants.py)
