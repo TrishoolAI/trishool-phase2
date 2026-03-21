@@ -102,8 +102,29 @@ mkdir -p "$OPENCLAW_WORKSPACE_DIR"
 # that reject creating new subdirectories from inside the container.
 mkdir -p "$OPENCLAW_CONFIG_DIR/identity"
 
-# Load .env for reading only (never overwrite; never write back)
-if [[ -f "$ROOT_DIR/.env" ]]; then
+TRISHOOL_ROOT="$(cd "$ROOT_DIR/.." && pwd)"
+# shellcheck source=../scripts/ensure-trishool-env.sh
+source "$TRISHOOL_ROOT/scripts/ensure-trishool-env.sh"
+ensure_trishool_root_env "$TRISHOOL_ROOT"
+
+# Load repo-root env for compose interpolation (never write files back).
+# Precedence: vars exported before this script win; then .env.tri-claw overrides .env for same keys.
+mapfile -t _TRISHOOL_INITIAL_EXPORTS < <(compgen -e || true)
+
+_was_exported_before_trishool_env_load() {
+  local k="$1"
+  local e
+  for e in "${_TRISHOOL_INITIAL_EXPORTS[@]}"; do
+    [[ "$e" == "$k" ]] && return 0
+  done
+  return 1
+}
+
+_load_trishool_env_file() {
+  local file="$1"
+  local mode="$2"
+  [[ -f "$file" ]] || return 0
+  local line key value
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" =~ ^[[:space:]]*# ]] && continue
     [[ "$line" =~ ^[[:space:]]*$ ]] && continue
@@ -111,14 +132,23 @@ if [[ -f "$ROOT_DIR/.env" ]]; then
     key="${key% }"
     key="${key#"${key%%[![:space:]]*}"}"
     [[ -z "$key" ]] && continue
-    # Only set if not already in environment
-    if [[ -z "${!key+x}" ]]; then
-      value="${line#*=}"
-      value="${value#"${value%%[![:space:]]*}"}"
+    value="${line#*=}"
+    value="${value#"${value%%[![:space:]]*}"}"
+    if [[ "$mode" == "unset_only" ]]; then
+      if [[ -z "${!key+x}" ]]; then
+        export "$key=$value"
+      fi
+    else
+      if _was_exported_before_trishool_env_load "$key"; then
+        continue
+      fi
       export "$key=$value"
     fi
-  done <"$ROOT_DIR/.env"
-fi
+  done <"$file"
+}
+
+_load_trishool_env_file "$TRISHOOL_ROOT/.env" unset_only
+_load_trishool_env_file "$TRISHOOL_ROOT/.env.tri-claw" override_repo
 
 export OPENCLAW_CONFIG_DIR
 export OPENCLAW_WORKSPACE_DIR
@@ -137,11 +167,11 @@ export OPENCLAW_HOME_VOLUME="$HOME_VOLUME_NAME"
 
 if [[ "$LEAN_MODE" == "true" ]]; then
   if [[ -z "${OPENCLAW_GATEWAY_PASSWORD:-}" ]]; then
-    fail "OPENCLAW_GATEWAY_PASSWORD must be set for lean mode. Add OPENCLAW_GATEWAY_PASSWORD=your-password to your .env file (in repo root) or export it before running."
+    fail "OPENCLAW_GATEWAY_PASSWORD must be set for lean mode. Add it to trishool/.env.tri-claw (or .env) or export it before running."
   fi
 else
   if [[ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]]; then
-    fail "OPENCLAW_GATEWAY_TOKEN must be set. Add OPENCLAW_GATEWAY_TOKEN=your-token to your .env file (in repo root) or export it before running."
+    fail "OPENCLAW_GATEWAY_TOKEN must be set. Add it to trishool/.env.tri-claw (or .env) or export it before running."
   fi
 fi
 export OPENCLAW_GATEWAY_TOKEN
@@ -238,7 +268,7 @@ for compose_file in "${COMPOSE_FILES[@]}"; do
   COMPOSE_HINT+=" -f ${compose_file}"
 done
 
-# Never update .env; all required vars must be in .env or exported before running.
+# Never update env files; required vars must be in trishool/.env / .env.tri-claw or exported before running.
 
 build_image() {
   echo "==> Building Docker image: $IMAGE_NAME"

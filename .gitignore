@@ -1,5 +1,7 @@
-# run-eval secrets (copy .env.example to .env)
+# run-eval + docker secrets (copy *.example files at repo root)
 .env
+.env.tri-claw
+.env.tri-judge
 main.env
 
 # eval output / artifacts
