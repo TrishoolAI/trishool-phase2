@@ -4,7 +4,7 @@
 #   docker build -f Dockerfile.lean -t openclaw:lean .
 #   OPENCLAW_IMAGE=openclaw:lean docker compose -f docker-compose.yml -f docker-compose.lean.yml up -d
 #
-# Pre-configure Chutes via .env:
+# Pre-configure Chutes via repo-root env files (trishool/.env + .env.tri-claw):
 #   CHUTES_BASE_URL=https://llm.chutes.ai/v1
 #   CHUTES_DEFAULT_MODEL_ID=zai-org/GLM-4.7-TEE
 #   CHUTES_DEFAULT_MODEL_REF=chutes/zai-org/GLM-4.7-TEE
@@ -31,14 +31,15 @@ services:
       options:
         max-size: "20m"
         max-file: "5"
-    env_file: [".env"]
+    env_file:
+      - ../.env.tri-claw
     environment:
       OPENCLAW_LEAN: "1"
       OPENCLAW_SKIP_CHANNELS: "1"
       OPENCLAW_ACCEPT_RISK: "1"
       OPENCLAW_GATEWAY_PORT: ${OPENCLAW_GATEWAY_PORT:-18789}
       OPENCLAW_GATEWAY_PASSWORD: ${OPENCLAW_GATEWAY_PASSWORD:-}
-      # CHUTES_* and CLAUDE_* are loaded from env_file: [".env"] — do NOT redeclare
+      # CHUTES_* and CLAUDE_* come from env_file (../.env, ../.env.tri-claw) — do NOT redeclare
       # them here with ${VAR:-} defaults or the environment: section will override
       # the .env values with empty strings (environment > env_file precedence).
       CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY:-}
