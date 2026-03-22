@@ -1,8 +1,43 @@
+## 0. For Evaluator
 # run-eval + docker secrets (copy *.example files at repo root)
 .env
 .env.tri-claw
 .env.tri-judge
 main.env
-
-# eval output / artifacts
 eval
+
+
+## 1. For Bittensor Subnet
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+*.venv
+
+# Env files
+*.env
+*.db
+*.db.bak
+
+# MacOS
+.DS_Store
+
+# Logging
+logs.json
+logs_mineshaft/
+
+# IDEs
+.idea/
+
+# Results
+logs/
+results/
+outputs/
+validator.config.js
+repo-auto-updater.config.js
+tmp/

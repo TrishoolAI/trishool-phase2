@@ -95,7 +95,7 @@ export class JudgeClient {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  async evaluate(input: EvaluateQuestionRequest): Promise<JudgeResponse> {
+  async evaluate(input: EvaluateQuestionRequest, apiKey: string): Promise<JudgeResponse> {
     const url = resolveCompletionUrl(this.config.judge.baseURL);
     const body = {
       model: this.config.judge.model,
@@ -133,7 +133,7 @@ export class JudgeClient {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            authorization: `Bearer ${process.env.JUDGE_API_KEY}`,
+            authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify(body),
           signal: controller.signal,

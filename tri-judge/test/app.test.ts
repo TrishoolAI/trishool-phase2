@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createApp } from "../src/app.js";
 import type { AppConfig } from "../src/types.js";
@@ -59,13 +59,8 @@ function startMockOpenAiServer(
   });
 }
 
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
-
 describe("createApp", () => {
   it("returns health", async () => {
-    vi.stubEnv("JUDGE_API_KEY", "test-key");
     const app = createApp({ ...config, judge: { ...config.judge, baseURL: "http://127.0.0.1" } });
 
     const response = await app.inject({
@@ -78,8 +73,21 @@ describe("createApp", () => {
     await app.close();
   });
 
+  it("rejects evaluate without X-Chutes-Api-Key header", async () => {
+    const app = createApp({ ...config, judge: { ...config.judge, baseURL: "http://127.0.0.1" } });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/judge/evaluate",
+      payload: buildRequestBody(),
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({ error: "Missing required X-Chutes-Api-Key header." });
+    await app.close();
+  });
+
   it("evaluates a request against the upstream judge", async () => {
-    vi.stubEnv("JUDGE_API_KEY", "test-key");
     const upstream = await startMockOpenAiServer((req, res) => {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(
@@ -111,6 +119,7 @@ describe("createApp", () => {
     const response = await app.inject({
       method: "POST",
       url: "/v1/judge/evaluate",
+      headers: { "x-chutes-api-key": "test-key" },
       payload: buildRequestBody(),
     });
 
@@ -130,7 +139,6 @@ describe("createApp", () => {
   });
 
   it("returns a 502 when the judge output is malformed", async () => {
-    vi.stubEnv("JUDGE_API_KEY", "test-key");
     const upstream = await startMockOpenAiServer((req, res) => {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(
@@ -154,6 +162,7 @@ describe("createApp", () => {
     const response = await app.inject({
       method: "POST",
       url: "/v1/judge/evaluate",
+      headers: { "x-chutes-api-key": "test-key" },
       payload: buildRequestBody(),
     });
 
@@ -167,7 +176,6 @@ describe("createApp", () => {
   });
 
   it("returns an upstream timeout error", async () => {
-    vi.stubEnv("JUDGE_API_KEY", "test-key");
     const upstream = await startMockOpenAiServer(async (req, res) => {
       await new Promise((resolve) => setTimeout(resolve, 300));
       res.writeHead(200, { "content-type": "application/json" });
@@ -200,6 +208,7 @@ describe("createApp", () => {
     const response = await app.inject({
       method: "POST",
       url: "/v1/judge/evaluate",
+      headers: { "x-chutes-api-key": "test-key" },
       payload: buildRequestBody(),
     });
 

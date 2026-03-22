@@ -23,8 +23,15 @@ export function createApp(config: AppConfig): FastifyInstance {
 
   app.post("/v1/judge/evaluate", async (request, reply) => {
     try {
+      const apiKey = request.headers["x-chutes-api-key"] as string | undefined;
+      if (!apiKey) {
+        return reply.code(401).send({
+          error: "Missing required X-Chutes-Api-Key header.",
+        });
+      }
+
       const parsedRequest = parseEvaluateQuestionRequest(request.body);
-      const result = await judgeClient.evaluate(parsedRequest);
+      const result = await judgeClient.evaluate(parsedRequest, apiKey);
       return reply.code(200).send(result);
     } catch (error) {
       if (error instanceof RequestValidationError) {
