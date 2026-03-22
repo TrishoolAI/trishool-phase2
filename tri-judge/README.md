@@ -7,7 +7,7 @@ Single-question LLM judge service for validating one already-evaluated miner res
 - `GET /health`
 - `POST /v1/judge/evaluate`
 
-Request body:
+Requires `X-Chutes-Api-Key` header. Request body:
 
 ```json
 {
@@ -35,12 +35,11 @@ Success response:
 
 ## Configuration
 
-Non-secret runtime config is loaded from [`docker/judge.lean.json`](/Users/navnn/Documents/AstrowareProjects/tri-judge/docker/judge.lean.json). Secrets are read from env vars:
+Non-secret runtime config is loaded from `docker/judge.lean.json`. Env vars:
 
-- `JUDGE_API_KEY`
 - `JUDGE_CONFIG_PATH` (optional, defaults to `docker/judge.lean.json`)
 
-The service expects an OpenAI-compatible upstream at `judge.baseURL`.
+The Chutes API key is **not** stored in the judge's environment. Instead, callers must send it per-request via the `X-Chutes-Api-Key` HTTP header. The service expects an OpenAI-compatible upstream at `judge.baseURL`.
 
 ## Local run
 
@@ -76,6 +75,7 @@ Evaluate a response:
 ```bash
 curl -s -X POST http://localhost:8080/v1/judge/evaluate \
   -H "Content-Type: application/json" \
+  -H "X-Chutes-Api-Key: <your-chutes-api-key>" \
   -d '{
     "question": "Q1",
     "prompt": "Original prompt",

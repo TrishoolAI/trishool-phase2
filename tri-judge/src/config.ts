@@ -70,11 +70,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new ConfigError("Missing or invalid judge config.");
   }
 
-  const apiKey = env.JUDGE_API_KEY;
-  if (!apiKey) {
-    throw new ConfigError("Missing required JUDGE_API_KEY environment variable.");
-  }
-
   return {
     server: {
       host: requireString(server, "host", "server"),

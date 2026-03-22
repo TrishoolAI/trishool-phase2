@@ -21,4 +21,4 @@ docker network inspect tri-shared &>/dev/null || docker network create tri-share
 
 # tri-judge (explicit project name so we never inherit COMPOSE_PROJECT_NAME=tri-claw from .env.tri-claw)
 cd "$ROOT/tri-judge"
-docker compose -p tri-judge --env-file "$ROOT/.env" --env-file "$ROOT/.env.tri-judge" up -d
+docker compose -p tri-judge --env-file "$ROOT/.env" --env-file "$ROOT/.env.tri-judge" up -d "$@"
