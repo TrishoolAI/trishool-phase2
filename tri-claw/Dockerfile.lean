@@ -14,16 +14,20 @@ RUN corepack enable
 WORKDIR /app
 RUN chown node:node /app
 
-COPY --chown=node:node package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY --chown=node:node package.json pnpm-workspace.yaml .npmrc ./
+# pnpm-lock.yaml is gitignored; copy it only when present (dev builds skip --frozen-lockfile)
 COPY --chown=node:node ui/package.json ./ui/package.json
 COPY --chown=node:node patches ./patches
 COPY --chown=node:node scripts ./scripts
 
 USER node
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 USER node
 COPY --chown=node:node . .
+# a2ui.bundle.js is gitignored; stub it so bundle-a2ui.sh takes the prebuilt-bundle path
+# (vendor/apps sources are excluded by .dockerignore, so this is the designed fallback).
+RUN mkdir -p src/canvas-host/a2ui && touch src/canvas-host/a2ui/a2ui.bundle.js
 RUN pnpm build
 ENV OPENCLAW_PREFER_PNPM=1
 RUN pnpm ui:build
@@ -47,6 +51,12 @@ COPY --chown=node:node docker/temps/config/infrastructure.yaml /home/node/.openc
 RUN chown -R node:node /home/node/.openclaw
 USER node
 ENV HOME=/home/node
+# Workspace templates: *.dev.md files are the committed fallbacks; promote each to its
+# non-dev name if the real file is absent (gitignored in the openclaw repo).
+RUN for f in docs/reference/templates/*.dev.md; do \
+      target=$(echo "$f" | sed 's/\.dev\.md$/.md/'); \
+      [ -f "$target" ] || cp "$f" "$target"; \
+    done
 RUN node dist/index.js setup
 
 CMD ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]

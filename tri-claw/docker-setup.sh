@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Re-exec under Bash when the file is run via another shell (e.g. `zsh ./docker-setup.sh`),
+# which ignores this shebang.
+if [[ -z "${BASH_VERSION:-}" ]]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -109,7 +114,11 @@ ensure_trishool_root_env "$TRISHOOL_ROOT"
 
 # Load repo-root env for compose interpolation (never write files back).
 # Precedence: vars exported before this script win; then .env.tri-claw overrides .env for same keys.
-mapfile -t _TRISHOOL_INITIAL_EXPORTS < <(compgen -e || true)
+# Use a read loop instead of mapfile: Bash 3.2 (macOS /bin/bash) has no mapfile.
+_TRISHOOL_INITIAL_EXPORTS=()
+while IFS= read -r line; do
+  _TRISHOOL_INITIAL_EXPORTS+=("$line")
+done < <(compgen -e || true)
 
 _was_exported_before_trishool_env_load() {
   local k="$1"
