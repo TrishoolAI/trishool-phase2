@@ -231,6 +231,7 @@ class RepoCommitChecker(BaseCommitChecker):
         down_ok = await self._run_bash_script("docker-down.sh")
         if not down_ok:
             logger.error("docker-down.sh failed; skipping docker-up.sh")
+            return False
 
         up_ok = await self._run_bash_script("docker-up.sh")
         if not up_ok:

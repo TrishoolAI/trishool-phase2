@@ -15,9 +15,12 @@ if ! docker info &>/dev/null; then
 fi
 
 COMPOSE_ENV_FILES=(--env-file "$ROOT/.env" --env-file "$ROOT/.env.tri-claw" --env-file "$ROOT/.env.tri-judge")
+# tri-judge: do NOT pass .env.tri-claw here — it sets COMPOSE_PROJECT_NAME=tri-claw, so compose would
+# tear down the wrong project and leave tri-judge-tri-judge-* running. Match docker-up.sh (-p tri-judge).
+TRIJUDGE_COMPOSE_ENV=(--env-file "$ROOT/.env" --env-file "$ROOT/.env.tri-judge")
 
 cd "$ROOT/tri-claw"
 docker compose "${COMPOSE_ENV_FILES[@]}" -f docker-compose.yml -f docker-compose.lean.yml down
 
 cd "$ROOT/tri-judge"
-docker compose "${COMPOSE_ENV_FILES[@]}" down
+docker compose -p tri-judge "${TRIJUDGE_COMPOSE_ENV[@]}" down

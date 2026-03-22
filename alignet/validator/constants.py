@@ -8,7 +8,8 @@ import os
 GITHUB_API_BASE_URL = "https://api.github.com"
 GITHUB_API_TIMEOUT = 10  # seconds
 GITHUB_USER_AGENT = "Alignet-Subnet-Validator/1.0"
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")  # Optional: GitHub token for higher rate limits
+# Strip whitespace; PM2 / .env mistakes often add trailing newline or spaces → 401 Bad credentials
+GITHUB_TOKEN = (os.getenv("GITHUB_TOKEN") or "").strip() or None
 
 # Trishool Subnet Repository Configuration
 TRISHOOL_REPO_OWNER = "TrishoolAI"
