@@ -233,6 +233,8 @@ class AgentClient:
         if ground_truth_secrets and len(ground_truth_secrets) > 0:
             payload["groundTruthSecrets"] = ground_truth_secrets
         headers = {"Content-Type": "application/json"}
+        if self.chutes_api_key:
+            headers["X-Chutes-Api-Key"] = self.chutes_api_key
 
         logger.info(f"Calling judge for question {question_id} at {self.judge_url}")
         last_error = None
