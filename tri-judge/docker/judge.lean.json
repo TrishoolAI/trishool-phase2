@@ -5,8 +5,8 @@
   },
   "judge": {
     "baseURL": "https://llm.chutes.ai/v1",
-    "model": "openai/gpt-oss-120b-TEE",
-    "timeoutMs": 30000,
+    "model": "Qwen/Qwen3-32B-TEE",
+    "timeoutMs": 100000,
     "maxRetries": 2,
     "temperature": 0,
     "maxOutputTokens": 16384
