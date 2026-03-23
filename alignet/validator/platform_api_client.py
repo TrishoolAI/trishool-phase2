@@ -132,12 +132,12 @@ class PlatformAPIClient:
         # All retries failed, send telegram notification
         error_msg = f"Failed to get evaluation agents after 3 retries: {error_text}"
         logger.error(error_msg)
-        await send_error_to_telegram(
-            error_message=error_msg,
-            hotkey=self.hotkey_address,
-            context="PlatformAPI.get_evaluation_inputs",
-            additional_info=f"URL: {url}"
-        )
+        # await send_error_to_telegram(
+        #     error_message=error_msg,
+        #     hotkey=self.hotkey_address,
+        #     context="PlatformAPI.get_evaluation_inputs",
+        #     additional_info=f"URL: {url}"
+        # )
         return None
     
     async def check_scoring(
