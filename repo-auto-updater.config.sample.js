@@ -1,13 +1,17 @@
 /**
  * PM2 Ecosystem Configuration for Repository Auto Updater
- * 
+ *
+ * Each start/restart can run docker-down.sh and docker-up.sh (no --build) via bash below,
+ * and/or once from Python at startup unless TRISHOOL_SKIP_STARTUP_DOCKER=1 (use that in .env
+ * when both would run).
+ *
  * This configuration file manages the auto-updater service that monitors
  * the trishool-subnet repository for new commits and automatically pulls
  * and restarts the application.
- * 
+ *
  * Env vars: set in repo-root `.env` (e.g. GITHUB_TOKEN=...) or in your shell.
  * PM2 does not load `.env` by itself; this file reads it when PM2 parses the config.
- * 
+ *
  * Usage:
  *   pm2 start repo-auto-updater.config.js
  *   pm2 restart repo-auto-updater
@@ -40,7 +44,6 @@ function loadEnvFile(filePath) {
     ) {
       val = val.slice(1, -1);
     } else {
-      // Unquoted: `KEY=value # note` would otherwise break secrets (e.g. GitHub PAT)
       const commentAt = val.search(/\s+#/);
       if (commentAt !== -1) val = val.slice(0, commentAt).trim();
     }
@@ -57,16 +60,6 @@ function pick(name, fallback = "") {
   if (fromShell !== undefined && String(fromShell).trim() !== "") return String(fromShell).trim();
   return fallback;
 }
-
-const pm2Env = {
-  GITHUB_TOKEN: pick("GITHUB_TOKEN", ""),
-  TRISHOOL_REPO_BRANCH: pick("TRISHOOL_REPO_BRANCH", "main"),
-  TRISHOOL_COMMIT_CHECK_INTERVAL: pick("TRISHOOL_COMMIT_CHECK_INTERVAL", "300"),
-  PM2_APP_NAME: pick("PM2_APP_NAME", "trishool-subnet"),
-  PYTHONPATH: __dirname,
-};
-const repoLocal = pick("REPO_LOCAL_PATH", "");
-if (repoLocal) pm2Env.REPO_LOCAL_PATH = repoLocal;
 
 /** Prefer PYTHON or PYTHON_BIN from .env / shell; else first `python3` / `python` on PATH. */
 function resolvePythonInterpreter() {
@@ -87,24 +80,50 @@ function resolvePythonInterpreter() {
   return "python3";
 }
 
+function shQuote(s) {
+  return "'" + String(s).replace(/'/g, "'\\''") + "'";
+}
+
 const pythonBin = resolvePythonInterpreter();
+const root = __dirname;
+
+const cmd = [
+  "set -euo pipefail",
+  `cd ${shQuote(root)}`,
+  "./docker-down.sh",
+  "./docker-up.sh",
+  `export PYTHONPATH=${shQuote(root)}`,
+  `exec ${shQuote(pythonBin)} -m alignet.validator.repo_auto_updater`,
+].join(" && ");
+
+const pm2Env = {
+  GITHUB_TOKEN: pick("GITHUB_TOKEN", ""),
+  TRISHOOL_REPO_BRANCH: pick("TRISHOOL_REPO_BRANCH", "main"),
+  TRISHOOL_COMMIT_CHECK_INTERVAL: pick("TRISHOOL_COMMIT_CHECK_INTERVAL", "300"),
+  PM2_APP_NAME: pick("PM2_APP_NAME", "trishool-subnet"),
+  PYTHONPATH: __dirname,
+  PYTHON_BIN: pythonBin,
+  // If PM2 already runs docker-down/up in `script` before Python, set TRISHOOL_SKIP_STARTUP_DOCKER=1 in .env
+  TRISHOOL_SKIP_STARTUP_DOCKER: pick("TRISHOOL_SKIP_STARTUP_DOCKER", ""),
+};
+const repoLocal = pick("REPO_LOCAL_PATH", "");
+if (repoLocal) pm2Env.REPO_LOCAL_PATH = repoLocal;
 
 module.exports = {
   apps: [
     {
       name: "repo-auto-updater",
-      script: pythonBin,
-      args: ["-m", "alignet.validator.repo_auto_updater"],
-      cwd: __dirname,
+      script: "/bin/bash",
+      args: ["-c", cmd],
+      cwd: root,
       autorestart: true,
       env: pm2Env,
-      
+
       // Advanced options
       min_uptime: "10s",
       max_restarts: 10,
       restart_delay: 4000,
       kill_timeout: 5000,
-    }
-  ]
+    },
+  ],
 };
-

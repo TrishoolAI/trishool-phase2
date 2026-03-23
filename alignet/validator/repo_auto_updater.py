@@ -11,6 +11,7 @@ Usage:
 """
 
 import asyncio
+import os
 import signal
 import sys
 from alignet.validator.repo_commit_checker import RepoCommitChecker
@@ -18,6 +19,15 @@ from alignet.validator.constants import TRISHOOL_COMMIT_CHECK_INTERVAL
 from alignet.utils.logging import get_logger
 
 logger = get_logger()
+
+
+def _env_skip_startup_docker() -> bool:
+    return os.environ.get("TRISHOOL_SKIP_STARTUP_DOCKER", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
 
 class RepoAutoUpdater:
@@ -41,7 +51,21 @@ class RepoAutoUpdater:
             f"Repository Auto Updater started. "
             f"Checking every {self.check_interval} seconds..."
         )
-        
+
+        # When no new commit is detected, check_for_updates skips docker entirely.
+        # Refresh the stack once per process start (no --build), same as a manual
+        # pm2 restart expectation. Set TRISHOOL_SKIP_STARTUP_DOCKER=1 if PM2 already
+        # runs docker-down.sh / docker-up.sh before this Python process (see ecosystem).
+        if not _env_skip_startup_docker():
+            logger.info(
+                "Startup Docker refresh (docker-down.sh / docker-up.sh, no --build)..."
+            )
+            ok = await self.commit_checker.bash_restart_agent(rebuild_images=False)
+            if not ok:
+                logger.error(
+                    "Startup Docker refresh failed; continuing with commit poll loop"
+                )
+
         try:
             while self.running:
                 try:
