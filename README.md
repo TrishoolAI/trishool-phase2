@@ -119,7 +119,9 @@ env: {
   PLATFORM_API_URL: "https://api.trishool.ai",
   TRI_CLAW_AGENT_URLS: "http://localhost:18789",
   JUDGE_AGENT_URLS:    "http://localhost:8080",
-  // ...
+  TELEGRAM_BOT_TOKEN: "sent_in_Discord_private_inbox",
+  TELEGRAM_CHANNEL_ID: "sent_in_Discord_private_inbox",
+
 },
 args: [
   "--netuid", "23",
@@ -196,7 +198,7 @@ pm2 restart trishool-subnet       # restart
 pm2 stop trishool-subnet          # stop without removing
 ```
 
-### Optional: repo auto-updater
+### Repo auto-updater
 
 Monitors the repo for new commits and automatically pulls + restarts the validator:
 
