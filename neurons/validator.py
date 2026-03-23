@@ -75,7 +75,7 @@ class Validator(BaseValidatorNeuron):
 
         
         # Initialize REST API client for platform communication
-        platform_api_url = os.getenv("PLATFORM_API_URL", "https://api.trishool.ai")
+        platform_api_url = os.getenv("PLATFORM_API_URL", "https://apiv2.trishool.ai")
         coldkey_name = self.config.wallet.name
         hotkey_name = self.config.wallet.hotkey
         network = self.config.subtensor.network
@@ -185,7 +185,8 @@ class Validator(BaseValidatorNeuron):
             # Fetch evaluation input (challenge + submission)
             eval_input = await self.api_client.get_evaluation_inputs()
             if not eval_input:
-                logger.info("No evaluation input available")
+                logger.info("No evaluation input available, sleeping for 20 seconds and trying again")
+                time.sleep(20)
                 return
 
             # Extract challenge and submission data
