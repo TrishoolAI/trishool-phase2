@@ -28,6 +28,8 @@ module.exports = {
         AGENT_HEALTH_CHECK_INTERVAL: 30,
         AGENT_MAX_RETRIES: 3,
         AGENT_RETRY_DELAY: 1.0,
+        OPENCLAW_GATEWAY_PASSWORD: "<your-gateway-password>",
+        CHUTES_API_KEY: "<your-chutes-api-key>",
       },
       args: ["--netuid", "23", "--subtensor.network", "finney", "--wallet.name", "your_wallet_name", "--wallet.hotkey", "your_hotkey_name"],
     }
