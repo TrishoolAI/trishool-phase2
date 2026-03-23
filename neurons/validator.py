@@ -75,7 +75,7 @@ class Validator(BaseValidatorNeuron):
 
         
         # Initialize REST API client for platform communication
-        platform_api_url = os.getenv("PLATFORM_API_URL", "https://apiv2.trishool.ai")
+        platform_api_url = os.getenv("PLATFORM_API_URL", "https://api.trishool.ai")
         coldkey_name = self.config.wallet.name
         hotkey_name = self.config.wallet.hotkey
         network = self.config.subtensor.network
