@@ -27,6 +27,9 @@ wheels/
 # MacOS
 .DS_Store
 
+# Auto-updater (local machine state; do not commit)
+.trishool-last-applied-commit
+
 # Logging
 logs.json
 logs_mineshaft/
