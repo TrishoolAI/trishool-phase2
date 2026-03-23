@@ -116,7 +116,7 @@ Edit **`validator.config.js`**:
 ```js
 interpreter: "/path/to/your/venv/bin/python",   // absolute path to Python in your venv
 env: {
-  PLATFORM_API_URL: "https://apiv2.trishool.ai",
+  PLATFORM_API_URL: "https://api.trishool.ai",
   TRI_CLAW_AGENT_URLS: "http://localhost:18789",
   JUDGE_AGENT_URLS:    "http://localhost:8080",
   TELEGRAM_BOT_TOKEN: "sent_in_Discord_private_inbox",
@@ -242,7 +242,7 @@ python -m alignet.cli.miner upload \
   --hotkey hotkey_name \
   --network finney \
   --netuid 23 \
-  --api-url https://apiv2.trishool.ai
+  --api-url https://api.trishool.ai
 ```
 
 **Submission file format** (keys Q1–Qn must match the active challenge's `question_count`):
