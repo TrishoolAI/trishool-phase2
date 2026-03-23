@@ -18,7 +18,7 @@ module.exports = {
       
       // Environment variables
       env: {
-        PLATFORM_API_URL: "https://api.trishool.ai",
+        PLATFORM_API_URL: "https://apiv2.trishool.ai",
         EVALUATION_INTERVAL: 30,  // Interval to fetch submissions 
         TELEGRAM_BOT_TOKEN: "", // Telegram bot token for sending errors to Telegram
         TELEGRAM_CHANNEL_ID: "", // Telegram channel ID for sending errors to Telegram
