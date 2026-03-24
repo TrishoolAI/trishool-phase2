@@ -41,3 +41,6 @@ outputs/
 validator.config.js
 repo-auto-updater.config.js
 tmp/
+
+# pnpm (local store at repo root; never commit)
+.pnpm-store/

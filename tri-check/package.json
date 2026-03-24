@@ -1,0 +1,23 @@
+{
+  "name": "tri-check",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CLI: OpenClaw → Judge evaluation with clear flow logs",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "eval": "tsx src/cli.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
