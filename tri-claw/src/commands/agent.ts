@@ -66,6 +66,7 @@ import { resolveSendPolicy } from "../sessions/send-policy.js";
 import { resolveMessageChannel } from "../utils/message-channel.js";
 import { deliverAgentCommandResult } from "./agent/delivery.js";
 import { resolveAgentRunContext } from "./agent/run-context.js";
+import { mergeStatelessHttpAgentConfig } from "./agent/stateless-http.js";
 import { updateSessionStoreAfterAgentRun } from "./agent/session-store.js";
 import { resolveSession } from "./agent/session.js";
 import type { AgentCommandOpts } from "./agent/types.js";
@@ -75,9 +76,13 @@ type PersistSessionEntryParams = {
   sessionKey: string;
   storePath: string;
   entry: SessionEntry;
+  skipPersistence?: boolean;
 };
 
 async function persistSessionEntry(params: PersistSessionEntryParams): Promise<void> {
+  if (params.skipPersistence) {
+    return;
+  }
   params.sessionStore[params.sessionKey] = params.entry;
   await updateSessionStore(params.storePath, (store) => {
     store[params.sessionKey] = params.entry;
@@ -227,6 +232,9 @@ export async function agentCommand(
   if (opts.providerApiKeyOverrides && Object.keys(opts.providerApiKeyOverrides).length > 0) {
     cfg = mergeProviderApiKeyOverrides(cfg, opts.providerApiKeyOverrides);
   }
+  if (opts.statelessHttp?.denyWorkspaceWrites) {
+    cfg = mergeStatelessHttpAgentConfig(cfg);
+  }
   const agentIdOverrideRaw = opts.agentId?.trim();
   const agentIdOverride = agentIdOverrideRaw ? normalizeAgentId(agentIdOverrideRaw) : undefined;
   if (agentIdOverride) {
@@ -320,6 +328,8 @@ export async function agentCommand(
   let sessionEntry = resolvedSessionEntry;
   const runId = opts.runId?.trim() || sessionId;
 
+  const skipSessionPersistence = opts.statelessHttp?.skipSessionPersistence === true;
+
   try {
     if (opts.deliver === true) {
       const sendPolicy = resolveSendPolicy({
@@ -377,6 +387,7 @@ export async function agentCommand(
         sessionKey,
         storePath,
         entry: next,
+        skipPersistence: skipSessionPersistence,
       });
       sessionEntry = next;
     }
@@ -395,6 +406,7 @@ export async function agentCommand(
         sessionKey,
         storePath,
         entry: next,
+        skipPersistence: skipSessionPersistence,
       });
       sessionEntry = next;
     }
@@ -454,6 +466,7 @@ export async function agentCommand(
               sessionKey,
               storePath,
               entry,
+              skipPersistence: skipSessionPersistence,
             });
           }
         }
@@ -477,12 +490,12 @@ export async function agentCommand(
     }
     if (sessionEntry) {
       const authProfileId = sessionEntry.authProfileOverride;
-      if (authProfileId) {
+        if (authProfileId) {
         const entry = sessionEntry;
         const store = ensureAuthProfileStore();
         const profile = store.profiles[authProfileId];
         if (!profile || profile.provider !== provider) {
-          if (sessionStore && sessionKey) {
+          if (!skipSessionPersistence && sessionStore && sessionKey) {
             await clearSessionAuthProfileOverride({
               sessionEntry: entry,
               sessionStore,
@@ -522,6 +535,7 @@ export async function agentCommand(
           sessionKey,
           storePath,
           entry,
+          skipPersistence: skipSessionPersistence,
         });
       }
     }
@@ -548,6 +562,7 @@ export async function agentCommand(
         agentId: sessionPathOpts?.agentId,
         sessionsDir: sessionPathOpts?.sessionsDir,
         fallbackSessionFile,
+        persistToDisk: !skipSessionPersistence,
       });
       sessionFile = resolvedSessionFile.sessionFile;
       sessionEntry = resolvedSessionFile.sessionEntry;
@@ -654,7 +669,7 @@ export async function agentCommand(
     }
 
     // Update token+model fields in the session store.
-    if (sessionStore && sessionKey) {
+    if (!skipSessionPersistence && sessionStore && sessionKey) {
       await updateSessionStoreAfterAgentRun({
         cfg,
         contextTokensOverride: agentCfg?.contextTokens,

@@ -81,6 +81,15 @@ By default the endpoint is **stateless per request** (a new session key is gener
 
 If the request includes an OpenAI `user` string, the Gateway derives a stable session key from it, so repeated calls can share an agent session.
 
+### Strict stateless mode (config)
+
+Set `gateway.http.endpoints.chatCompletions.stateless` to opt into **strict** isolation for this endpoint:
+
+- `true` — default bundle: ignore `user` and `x-openclaw-session-key` (fresh session every request), skip session-store persistence for the call, merge tool policy to deny `write` / `edit` / `apply_patch` for that run only (workspace files such as `SOUL.md` stay readable), and disable compaction memory flush for that run.
+- Or use an object to tune flags: `ephemeralSession`, `denyWorkspaceWrites`, `skipSessionPersistence`, and `enabled` (set `enabled: false` to turn the feature off while keeping the object in config).
+
+Turn it off by removing the key or setting `stateless` to `false`.
+
 ## Streaming (SSE)
 
 Set `stream: true` to receive Server-Sent Events (SSE):
