@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  AgentToolsSchema,
   HeartbeatSchema,
   AgentSandboxSchema,
   AgentModelSchema,
@@ -96,6 +97,7 @@ export const AgentDefaultsSchema = z
       })
       .strict()
       .optional(),
+    tools: AgentToolsSchema,
     thinkingDefault: z
       .union([
         z.literal("off"),

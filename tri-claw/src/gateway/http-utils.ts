@@ -67,7 +67,16 @@ export function resolveSessionKey(params: {
   agentId: string;
   user?: string | undefined;
   prefix: string;
+  /**
+   * When true, ignore `x-openclaw-session-key` and OpenAI `user` pinning; always start a fresh session.
+   */
+  forceEphemeral?: boolean;
 }): string {
+  if (params.forceEphemeral) {
+    const mainKey = `${params.prefix}:${randomUUID()}`;
+    return buildAgentMainSessionKey({ agentId: params.agentId, mainKey });
+  }
+
   const explicit = getHeader(params.req, "x-openclaw-session-key")?.trim();
   if (explicit) {
     return explicit;

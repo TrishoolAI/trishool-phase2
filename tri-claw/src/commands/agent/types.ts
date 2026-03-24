@@ -82,4 +82,13 @@ export type AgentCommandOpts = {
    * Example: { chutes: "cpk_..." } for ephemeral Chutes auth.
    */
   providerApiKeyOverrides?: Record<string, string>;
+  /**
+   * OpenAI `/v1/chat/completions` stateless mode: merge ephemeral-session defaults for this run.
+   */
+  statelessHttp?: {
+    skipSessionPersistence: boolean;
+    mergeStatelessHttpDefaults: boolean;
+    /** When false, skip default protected workspace paths (still disables compaction memory flush). */
+    protectWorkspaceStateFiles?: boolean;
+  };
 };
