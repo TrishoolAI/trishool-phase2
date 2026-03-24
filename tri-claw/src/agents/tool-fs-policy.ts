@@ -13,13 +13,21 @@ export function createToolFsPolicy(params: { workspaceOnly?: boolean }): ToolFsP
 
 export function resolveToolFsConfig(params: { cfg?: OpenClawConfig; agentId?: string }): {
   workspaceOnly?: boolean;
+  protectedPaths?: string[];
 } {
   const cfg = params.cfg;
   const globalFs = cfg?.tools?.fs;
   const agentFs =
     cfg && params.agentId ? resolveAgentConfig(cfg, params.agentId)?.tools?.fs : undefined;
+  const globalProtected = globalFs?.protectedPaths;
+  const agentProtected = agentFs?.protectedPaths;
+  const protectedPaths =
+    agentProtected !== undefined || globalProtected !== undefined
+      ? [...new Set([...(globalProtected ?? []), ...(agentProtected ?? [])].map(String).filter(Boolean))]
+      : undefined;
   return {
     workspaceOnly: agentFs?.workspaceOnly ?? globalFs?.workspaceOnly,
+    protectedPaths,
   };
 }
 

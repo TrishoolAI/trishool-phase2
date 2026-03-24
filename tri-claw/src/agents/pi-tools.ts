@@ -41,6 +41,7 @@ import {
   createSandboxedWriteTool,
   normalizeToolParams,
   patchToolSchemaForClaudeCompatibility,
+  wrapToolProtectedPathGuard,
   wrapToolWorkspaceRootGuard,
   wrapToolWorkspaceRootGuardWithOptions,
   wrapToolParamNormalization,
@@ -282,6 +283,7 @@ export function createOpenClawCodingTools(options?: {
   ]);
   const execConfig = resolveExecConfig({ cfg: options?.config, agentId });
   const fsConfig = resolveToolFsConfig({ cfg: options?.config, agentId });
+  const protectedRels = fsConfig.protectedPaths ?? [];
   const fsPolicy = createToolFsPolicy({
     workspaceOnly: fsConfig.workspaceOnly,
   });
@@ -340,10 +342,16 @@ export function createOpenClawCodingTools(options?: {
         return [];
       }
       // Wrap with param normalization for Claude Code compatibility
-      const wrapped = wrapToolParamNormalization(
+      let wrapped = wrapToolParamNormalization(
         createWriteTool(workspaceRoot),
         CLAUDE_PARAM_GROUPS.write,
       );
+      if (protectedRels.length > 0) {
+        wrapped = wrapToolProtectedPathGuard(wrapped, {
+          workspaceRoot,
+          protectedRels,
+        });
+      }
       return [workspaceOnly ? wrapToolWorkspaceRootGuard(wrapped, workspaceRoot) : wrapped];
     }
     if (tool.name === "edit") {
@@ -351,10 +359,16 @@ export function createOpenClawCodingTools(options?: {
         return [];
       }
       // Wrap with param normalization for Claude Code compatibility
-      const wrapped = wrapToolParamNormalization(
+      let wrapped = wrapToolParamNormalization(
         createEditTool(workspaceRoot),
         CLAUDE_PARAM_GROUPS.edit,
       );
+      if (protectedRels.length > 0) {
+        wrapped = wrapToolProtectedPathGuard(wrapped, {
+          workspaceRoot,
+          protectedRels,
+        });
+      }
       return [workspaceOnly ? wrapToolWorkspaceRootGuard(wrapped, workspaceRoot) : wrapped];
     }
     return [tool];
@@ -383,6 +397,7 @@ export function createOpenClawCodingTools(options?: {
     notifyOnExit: options?.exec?.notifyOnExit ?? execConfig.notifyOnExit,
     notifyOnExitEmptySuccess:
       options?.exec?.notifyOnExitEmptySuccess ?? execConfig.notifyOnExitEmptySuccess,
+    protectedWorkspacePaths: protectedRels.length > 0 ? protectedRels : undefined,
     sandbox: sandbox
       ? {
           containerName: sandbox.containerName,
@@ -406,31 +421,42 @@ export function createOpenClawCodingTools(options?: {
               ? { root: sandboxRoot, bridge: sandboxFsBridge! }
               : undefined,
           workspaceOnly: applyPatchWorkspaceOnly,
+          protectedWorkspaceRels: protectedRels.length > 0 ? protectedRels : undefined,
         });
   const tools: AnyAgentTool[] = [
     ...base,
     ...(sandboxRoot
       ? allowWorkspaceWrites
-        ? [
-            workspaceOnly
-              ? wrapToolWorkspaceRootGuardWithOptions(
-                  createSandboxedEditTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
-                  sandboxRoot,
-                  {
+        ? (() => {
+            const editBase = createSandboxedEditTool({ root: sandboxRoot, bridge: sandboxFsBridge! });
+            const writeBase = createSandboxedWriteTool({ root: sandboxRoot, bridge: sandboxFsBridge! });
+            const protOpts = {
+              workspaceRoot: sandboxRoot,
+              sandboxRoot,
+              containerWorkdir: sandbox.containerWorkdir,
+              protectedRels,
+            };
+            const editWrapped =
+              protectedRels.length > 0
+                ? wrapToolProtectedPathGuard(editBase, protOpts)
+                : editBase;
+            const writeWrapped =
+              protectedRels.length > 0
+                ? wrapToolProtectedPathGuard(writeBase, protOpts)
+                : writeBase;
+            return [
+              workspaceOnly
+                ? wrapToolWorkspaceRootGuardWithOptions(editWrapped, sandboxRoot, {
                     containerWorkdir: sandbox.containerWorkdir,
-                  },
-                )
-              : createSandboxedEditTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
-            workspaceOnly
-              ? wrapToolWorkspaceRootGuardWithOptions(
-                  createSandboxedWriteTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
-                  sandboxRoot,
-                  {
+                  })
+                : editWrapped,
+              workspaceOnly
+                ? wrapToolWorkspaceRootGuardWithOptions(writeWrapped, sandboxRoot, {
                     containerWorkdir: sandbox.containerWorkdir,
-                  },
-                )
-              : createSandboxedWriteTool({ root: sandboxRoot, bridge: sandboxFsBridge! }),
-          ]
+                  })
+                : writeWrapped,
+            ];
+          })()
         : []
       : []),
     ...(applyPatchTool ? [applyPatchTool as unknown as AnyAgentTool] : []),

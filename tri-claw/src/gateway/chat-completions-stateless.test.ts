@@ -6,8 +6,8 @@ describe("resolveGatewayChatCompletionsStateless", () => {
     expect(resolveGatewayChatCompletionsStateless(undefined)).toEqual({
       enabled: false,
       ephemeralSession: false,
-      denyWorkspaceWrites: false,
       skipSessionPersistence: false,
+      protectWorkspaceStateFiles: false,
     });
   });
 
@@ -21,8 +21,8 @@ describe("resolveGatewayChatCompletionsStateless", () => {
     ).toEqual({
       enabled: true,
       ephemeralSession: true,
-      denyWorkspaceWrites: true,
       skipSessionPersistence: true,
+      protectWorkspaceStateFiles: true,
     });
   });
 
@@ -35,8 +35,8 @@ describe("resolveGatewayChatCompletionsStateless", () => {
               chatCompletions: {
                 stateless: {
                   ephemeralSession: true,
-                  denyWorkspaceWrites: false,
                   skipSessionPersistence: false,
+                  protectWorkspaceStateFiles: false,
                 },
               },
             },
@@ -46,8 +46,8 @@ describe("resolveGatewayChatCompletionsStateless", () => {
     ).toEqual({
       enabled: true,
       ephemeralSession: true,
-      denyWorkspaceWrites: false,
       skipSessionPersistence: false,
+      protectWorkspaceStateFiles: false,
     });
   });
 
@@ -65,8 +65,8 @@ describe("resolveGatewayChatCompletionsStateless", () => {
     ).toEqual({
       enabled: false,
       ephemeralSession: false,
-      denyWorkspaceWrites: false,
       skipSessionPersistence: false,
+      protectWorkspaceStateFiles: false,
     });
   });
 });

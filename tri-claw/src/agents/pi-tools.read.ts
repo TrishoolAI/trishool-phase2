@@ -9,6 +9,7 @@ import type { AnyAgentTool } from "./pi-tools.types.js";
 import { assertSandboxPath } from "./sandbox-paths.js";
 import type { SandboxFsBridge } from "./sandbox/fs-bridge.js";
 import { sanitizeToolResultImages } from "./tool-images.js";
+import { assertWorkspacePathNotProtected } from "./tool-protected-paths.js";
 
 // NOTE(steipete): Upstream read now does file-magic MIME detection; we keep the wrapper
 // to normalize payloads and sanitize oversized images before they hit providers.
@@ -604,6 +605,50 @@ function mapContainerPathToWorkspaceRoot(params: {
     return path.resolve(params.root);
   }
   return path.resolve(params.root, ...relative.split("/").filter(Boolean));
+}
+
+export function wrapToolProtectedPathGuard(
+  tool: AnyAgentTool,
+  params: {
+    workspaceRoot: string;
+    protectedRels: string[];
+    containerWorkdir?: string;
+    sandboxRoot?: string;
+  },
+): AnyAgentTool {
+  if (!params.protectedRels.length) {
+    return tool;
+  }
+  const root = params.sandboxRoot ?? params.workspaceRoot;
+  return {
+    ...tool,
+    execute: async (toolCallId, args, signal, onUpdate) => {
+      const normalized = normalizeToolParams(args);
+      const record =
+        normalized ??
+        (args && typeof args === "object" ? (args as Record<string, unknown>) : undefined);
+      const filePath = record?.path;
+      if (typeof filePath === "string" && filePath.trim()) {
+        const mapped = params.sandboxRoot
+          ? mapContainerPathToWorkspaceRoot({
+              filePath,
+              root: params.sandboxRoot,
+              containerWorkdir: params.containerWorkdir,
+            })
+          : filePath;
+        const resolvedAbs = path.isAbsolute(mapped)
+          ? path.resolve(mapped)
+          : path.resolve(params.sandboxRoot ?? params.workspaceRoot, mapped);
+        assertWorkspacePathNotProtected({
+          workspaceRoot: root,
+          absolutePath: resolvedAbs,
+          protectedRels: params.protectedRels,
+          label: tool.name,
+        });
+      }
+      return tool.execute(toolCallId, normalized ?? args, signal, onUpdate);
+    },
+  };
 }
 
 export function wrapToolWorkspaceRootGuardWithOptions(

@@ -588,8 +588,8 @@ export const OpenClawSchema = z
                           .object({
                             enabled: z.boolean().optional(),
                             ephemeralSession: z.boolean().optional(),
-                            denyWorkspaceWrites: z.boolean().optional(),
                             skipSessionPersistence: z.boolean().optional(),
+                            protectWorkspaceStateFiles: z.boolean().optional(),
                           })
                           .strict(),
                       ])

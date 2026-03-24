@@ -79,8 +79,9 @@ function buildAgentCommandInput(params: {
   runId: string;
   providerApiKeyOverrides?: Record<string, string>;
   statelessHttp?: {
-    denyWorkspaceWrites: boolean;
     skipSessionPersistence: boolean;
+    mergeStatelessHttpDefaults: boolean;
+    protectWorkspaceStateFiles?: boolean;
   };
 }) {
   return {
@@ -304,13 +305,13 @@ export async function handleOpenAiHttpRequest(
   const providerApiKeyOverrides =
     chutesKey != null && chutesKey.length > 0 ? { chutes: chutesKey } : undefined;
   const deps = createDefaultDeps();
-  const statelessHttp =
-    st?.enabled && (st.denyWorkspaceWrites || st.skipSessionPersistence)
-      ? {
-          denyWorkspaceWrites: st.denyWorkspaceWrites,
-          skipSessionPersistence: st.skipSessionPersistence,
-        }
-      : undefined;
+  const statelessHttp = st?.enabled
+    ? {
+        skipSessionPersistence: st.skipSessionPersistence,
+        mergeStatelessHttpDefaults: true,
+        protectWorkspaceStateFiles: st.protectWorkspaceStateFiles,
+      }
+    : undefined;
   const commandInput = buildAgentCommandInput({
     prompt,
     sessionKey,
