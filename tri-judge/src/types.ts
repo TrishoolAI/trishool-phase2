@@ -28,6 +28,7 @@ export type AppConfig = {
   judge: {
     baseURL: string;
     model: string;
+    models: string[];
     timeoutMs: number;
     maxRetries: number;
     temperature?: number;

@@ -374,6 +374,8 @@ export type PluginHookWrapStreamFnEvent = {
   provider: string;
   model: string;
   modelApi?: string | null;
+  /** Merged runtime config for this agent run (includes header/env provider key overrides). */
+  openClawConfig?: OpenClawConfig;
 };
 
 export type PluginHookWrapStreamFnResult = {
