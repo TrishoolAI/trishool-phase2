@@ -91,18 +91,32 @@ GITHUB_TOKEN=<PAT with repo read>           # for repo-auto-updater (optional)
 ```
 OPENCLAW_GATEWAY_PASSWORD=<same-as-above>
 OPENCLAW_IMAGE=openclaw:lean
-CHUTES_BASE_URL=https://llm.chutes.ai/v1
-CHUTES_DEFAULT_MODEL_ID=Qwen/Qwen3-Next-80B-A3B-Instruct
-CHUTES_DEFAULT_MODEL_REF=chutes/Qwen/Qwen3-Next-80B-A3B-Instruct
-CHUTES_FAST_MODEL_ID=Qwen/Qwen3-Next-80B-A3B-Instruct
-CHUTES_FAST_MODEL_REF=chutes/Qwen/Qwen3-Next-80B-A3B-Instruct
 ```
+> Chutes base URL and model fallback order now live in `tri-claw/docker/openclaw.lean.json`.
 
 **`.env.tri-judge`** — Judge Docker service:
 ```
 JUDGE_CONFIG_PATH=docker/judge.lean.json
 ```
 > The Chutes API key is sent per-request via `X-Chutes-Api-Key` header (sourced from `CHUTES_API_KEY` in `.env`), so it does not need to be stored in the judge's environment.
+
+### Chutes integration smoke tests (optional)
+
+With `CHUTES_API_KEY` or `OPENCLAW_CHUTES_TOKEN` set (e.g. in repo root `.env` or `.env.tri-claw`):
+
+1. **OpenClaw lean model chain** — pings `chat/completions` for each model in `tri-claw/docker/openclaw.lean.json` (primary + fallbacks):
+
+   ```bash
+   node scripts/chutes-openclaw-smoke.mjs
+   ```
+
+2. **Judge** — pings each model in `tri-judge/docker/judge.lean.json`, then runs one full `JudgeClient.evaluate()` against Chutes:
+
+   ```bash
+   cd tri-judge && npm run test:integration
+   ```
+
+Exit code `2` means no API key was found; `1` means at least one HTTP call failed.
 
 ### 5. Set up PM2 config files
 

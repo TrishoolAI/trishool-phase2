@@ -23,7 +23,19 @@
   },
   "agents": {
     "defaults": {
-      "workspace": "/home/node/.openclaw/workspace"
+      "workspace": "/home/node/.openclaw/workspace",
+      "model": {
+        "primary": "chutes/chutesai/Mistral-Small-3.1-24B-Instruct-2503-TEE",
+        "fallbacks": [
+          "chutes/Qwen/Qwen3-32B-TEE",
+          "chutes/unsloth/gemma-3-27b-it"
+        ]
+      },
+      "models": {
+        "chutes-default": { "alias": "chutes/chutesai/Mistral-Small-3.1-24B-Instruct-2503-TEE" },
+        "chutes-fast": { "alias": "chutes/Qwen/Qwen3-32B-TEE" },
+        "chutes-third": { "alias": "chutes/unsloth/gemma-3-27b-it" }
+      }
     }
   },
   "session": {
@@ -59,6 +71,53 @@
           },
           "refusalText": "Blocked by guard model."
         }
+      }
+    }
+  },
+  "models": {
+    "providers": {
+      "chutes": {
+        "baseUrl": "https://llm.chutes.ai/v1",
+        "api": "openai-completions",
+        "auth": "api-key",
+        "models": [
+          {
+            "id": "chutesai/Mistral-Small-3.1-24B-Instruct-2503-TEE",
+            "name": "Chutes Mistral-Small-3.1-24B-Instruct-2503-TEE",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 128000,
+            "maxTokens": 16384
+          },
+          {
+            "id": "Qwen/Qwen3-32B-TEE",
+            "name": "Chutes Qwen3-32B-TEE",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 128000,
+            "maxTokens": 16384
+          },
+          {
+            "id": "unsloth/gemma-3-27b-it",
+            "name": "Chutes Gemma-3-27b-it",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 128000,
+            "maxTokens": 16384
+          },
+          {
+            "id": "Qwen/Qwen3Guard-Gen-0.6B",
+            "name": "Chutes Qwen3Guard-Gen-0.6B",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 128000,
+            "maxTokens": 16384
+          }
+        ]
       }
     }
   },

@@ -832,6 +832,7 @@ export async function runEmbeddedAttempt(
               provider: params.provider,
               model: params.modelId,
               modelApi: params.model.api ?? null,
+              openClawConfig: params.config,
             },
             {
               agentId: sessionAgentId,

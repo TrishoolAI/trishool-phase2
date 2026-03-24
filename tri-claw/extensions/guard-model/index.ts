@@ -283,8 +283,12 @@ function normalizeGuardConfig(value: unknown): GuardPluginConfig {
   };
 }
 
-function loadLiveGuardConfig(api: OpenClawPluginApi): GuardPluginConfig {
-  const cfg = api.runtime.config.loadConfigFresh() as OpenClawConfig & {
+function loadLiveGuardConfig(
+  api: OpenClawPluginApi,
+  /** When set, use this merged config (same run as main agent); avoids dropping per-request API key overrides. */
+  openClawConfig?: OpenClawConfig,
+): GuardPluginConfig {
+  const cfg = (openClawConfig ?? api.runtime.config.loadConfigFresh()) as OpenClawConfig & {
     plugins?: { entries?: Record<string, { config?: unknown }> };
   };
   const liveConfig = cfg.plugins?.entries?.[GUARD_PLUGIN_ID]?.config;
@@ -389,18 +393,20 @@ async function loadRunEmbeddedPiAgent(): Promise<RunEmbeddedPiAgentFn> {
 
 async function runGuardCheck(params: {
   api: OpenClawPluginApi;
+  /** Merged config for this agent run; required for guard to use the same Chutes key as the main model. */
+  openClawConfig?: OpenClawConfig;
   phase: "input" | "output";
   provider: string;
   model: string;
   payload: unknown;
 }): Promise<GuardDecision> {
-  const cfg = loadLiveGuardConfig(params.api);
+  const liveConfig =
+    params.openClawConfig ?? (params.api.runtime.config.loadConfigFresh() as OpenClawConfig);
+  const cfg = loadLiveGuardConfig(params.api, liveConfig);
   const scope = resolveScopeConfig(cfg, params.phase);
   if (!scope.enabled || !scope.model) {
     return { decision: "allow" };
   }
-
-  const liveConfig = params.api.runtime.config.loadConfigFresh();
   const resolvedGuardRef = resolveModelTarget({ raw: scope.model, cfg: liveConfig });
   const payloadJson = truncateForGuard(
     safeJsonStringify(params.payload) ?? JSON.stringify(params.payload),
@@ -453,12 +459,15 @@ async function runGuardCheck(params: {
 
 async function runGuardCheckSafe(params: {
   api: OpenClawPluginApi;
+  openClawConfig?: OpenClawConfig;
   phase: "input" | "output";
   provider: string;
   model: string;
   payload: unknown;
 }): Promise<GuardDecision> {
-  const cfg = loadLiveGuardConfig(params.api);
+  const liveConfig =
+    params.openClawConfig ?? (params.api.runtime.config.loadConfigFresh() as OpenClawConfig);
+  const cfg = loadLiveGuardConfig(params.api, liveConfig);
   const policy = normalizeGuardPolicyConfig(cfg.policy);
   try {
     return await runGuardCheck(params);
@@ -536,8 +545,9 @@ export const __testing = {
 
 export default function register(api: OpenClawPluginApi) {
   api.on("wrap_stream_fn", (event, ctx) => {
+    const mergedOpenClawConfig = event.openClawConfig as OpenClawConfig | undefined;
     const wrapped = ((model, context, options) => {
-      const liveCfg = loadLiveGuardConfig(api);
+      const liveCfg = loadLiveGuardConfig(api, mergedOpenClawConfig);
       if ((ctx.sessionId ?? "").startsWith(GUARD_SESSION_PREFIX) || liveCfg.enabled === false) {
         return event.streamFn(model, context, options);
       }
@@ -555,6 +565,7 @@ export default function register(api: OpenClawPluginApi) {
           if (inputScope.enabled && inputScope.model) {
             const inputDecision = await runGuardCheckSafe({
               api,
+              openClawConfig: mergedOpenClawConfig,
               phase: "input",
               provider,
               model: modelId,
@@ -596,6 +607,7 @@ export default function register(api: OpenClawPluginApi) {
           if (lastAssistantText.trim()) {
             const outputDecision = await runGuardCheckSafe({
               api,
+              openClawConfig: mergedOpenClawConfig,
               phase: "output",
               provider,
               model: modelId,
