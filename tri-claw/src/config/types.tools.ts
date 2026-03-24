@@ -269,6 +269,12 @@ export type FsToolsConfig = {
    * Default: false (unrestricted, matches legacy behavior).
    */
   workspaceOnly?: boolean;
+  /**
+   * Workspace-relative POSIX paths (no `..`, no leading `/`) that deny mutations from
+   * `write` / `edit` / `apply_patch`, are checked best-effort for `exec`, and get extra
+   * read-only Docker submounts when sandboxed.
+   */
+  protectedPaths?: string[];
 };
 
 export type AgentToolsConfig = {

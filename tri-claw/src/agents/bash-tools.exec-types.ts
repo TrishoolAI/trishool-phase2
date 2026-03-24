@@ -24,6 +24,8 @@ export type ExecToolDefaults = {
   notifyOnExit?: boolean;
   notifyOnExitEmptySuccess?: boolean;
   cwd?: string;
+  /** Workspace-relative protected paths; exec preflight rejects literal references (best-effort). */
+  protectedWorkspacePaths?: string[];
 };
 
 export type ExecElevatedDefaults = {

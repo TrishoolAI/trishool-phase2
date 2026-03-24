@@ -354,4 +354,25 @@ describe("resolveAndPersistSessionFile", () => {
     const saved = loadSessionStore(fixture.storePath(), { skipCache: true });
     expect(saved[sessionKey]?.sessionFile).toBe(fallbackSessionFile);
   });
+
+  it("does not write the session store when persistToDisk is false", async () => {
+    const sessionId = "ephemeral-session-id";
+    const sessionKey = "agent:main:openai:ephemeral";
+    fs.writeFileSync(fixture.storePath(), JSON.stringify({}), "utf-8");
+    const sessionStore = loadSessionStore(fixture.storePath(), { skipCache: true });
+    const fallbackSessionFile = resolveSessionTranscriptPathInDir(sessionId, fixture.sessionsDir());
+
+    const result = await resolveAndPersistSessionFile({
+      sessionId,
+      sessionKey,
+      sessionStore,
+      storePath: fixture.storePath(),
+      fallbackSessionFile,
+      persistToDisk: false,
+    });
+
+    expect(result.sessionFile).toBe(fallbackSessionFile);
+    const saved = loadSessionStore(fixture.storePath(), { skipCache: true });
+    expect(saved[sessionKey]).toBeUndefined();
+  });
 });

@@ -6,6 +6,8 @@ import { loadConfig } from "../../config/config.js";
 import { defaultRuntime } from "../../runtime.js";
 import { resolveUserPath } from "../../utils.js";
 import { syncSkillsToWorkspace } from "../skills.js";
+import { resolveToolFsConfig } from "../tool-fs-policy.js";
+import { buildProtectedWorkspaceDockerBinds } from "../tool-protected-paths.js";
 import { DEFAULT_AGENT_WORKSPACE_DIR } from "../workspace.js";
 import { ensureSandboxBrowser } from "./browser.js";
 import { resolveSandboxConfigForAgent } from "./config.js";
@@ -114,7 +116,7 @@ export async function resolveSandboxContext(params: {
   if (!resolved) {
     return null;
   }
-  const { rawSessionKey, cfg } = resolved;
+  const { rawSessionKey, cfg, runtime } = resolved;
 
   await maybePruneSandboxes(cfg);
 
@@ -129,7 +131,27 @@ export async function resolveSandboxContext(params: {
     docker: cfg.docker,
     workspaceDir,
   });
-  const resolvedCfg = docker === cfg.docker ? cfg : { ...cfg, docker };
+  let resolvedCfg = docker === cfg.docker ? cfg : { ...cfg, docker };
+
+  const { protectedPaths } = resolveToolFsConfig({
+    cfg: params.config,
+    agentId: runtime.agentId,
+  });
+  const prot = protectedPaths ?? [];
+  const extraBinds = buildProtectedWorkspaceDockerBinds({
+    hostWorkspaceRoot: workspaceDir,
+    containerWorkdir: resolvedCfg.docker.workdir,
+    protectedRels: prot,
+  });
+  if (extraBinds.length > 0) {
+    resolvedCfg = {
+      ...resolvedCfg,
+      docker: {
+        ...resolvedCfg.docker,
+        binds: [...(resolvedCfg.docker.binds ?? []), ...extraBinds],
+      },
+    };
+  }
 
   const containerName = await ensureSandboxContainer({
     sessionKey: rawSessionKey,

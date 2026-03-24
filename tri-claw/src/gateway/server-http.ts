@@ -54,6 +54,7 @@ import {
   resolveHookChannel,
   resolveHookDeliver,
 } from "./hooks.js";
+import { resolveGatewayChatCompletionsStateless } from "./chat-completions-stateless.js";
 import { sendGatewayAuthFailure, setDefaultSecurityHeaders } from "./http-common.js";
 import { getBearerToken } from "./http-utils.js";
 import { handleOpenAiHttpRequest } from "./openai-http.js";
@@ -524,12 +525,14 @@ export function createGatewayHttpServer(opts: {
         }
       }
       if (openAiChatCompletionsEnabled) {
+        const chatCompletionsStateless = resolveGatewayChatCompletionsStateless(configSnapshot);
         if (
           await handleOpenAiHttpRequest(req, res, {
             auth: resolvedAuth,
             trustedProxies,
             allowRealIpFallback,
             rateLimiter,
+            chatCompletionsStateless,
           })
         ) {
           return;

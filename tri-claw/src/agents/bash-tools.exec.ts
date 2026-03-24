@@ -43,6 +43,7 @@ import {
   resolveWorkdir,
   truncateMiddle,
 } from "./bash-tools.shared.js";
+import { assertExecCommandAvoidsProtectedWorkspacePaths } from "./tool-protected-paths.js";
 import { assertSandboxPath } from "./sandbox-paths.js";
 
 export type { BashSandboxConfig } from "./bash-tools.shared.js";
@@ -224,6 +225,16 @@ export function createExecTool(
 
       if (!params.command) {
         throw new Error("Provide a command to start.");
+      }
+
+      const prot = defaults?.protectedWorkspacePaths;
+      if (prot && prot.length > 0) {
+        const workspaceRootForExec = defaults?.cwd ? path.resolve(defaults.cwd) : process.cwd();
+        assertExecCommandAvoidsProtectedWorkspacePaths({
+          command: params.command,
+          workspaceRoot: workspaceRootForExec,
+          protectedRels: prot,
+        });
       }
 
       const maxOutput = DEFAULT_MAX_OUTPUT;

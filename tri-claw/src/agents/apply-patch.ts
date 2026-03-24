@@ -5,6 +5,7 @@ import { Type } from "@sinclair/typebox";
 import { applyUpdateHunk } from "./apply-patch-update.js";
 import { assertSandboxPath, resolveSandboxInputPath } from "./sandbox-paths.js";
 import type { SandboxFsBridge } from "./sandbox/fs-bridge.js";
+import { assertWorkspacePathNotProtected } from "./tool-protected-paths.js";
 
 const BEGIN_PATCH_MARKER = "*** Begin Patch";
 const END_PATCH_MARKER = "*** End Patch";
@@ -68,6 +69,8 @@ type ApplyPatchOptions = {
   sandbox?: SandboxApplyPatchConfig;
   /** Restrict patch paths to the workspace root (cwd). Default: true. Set false to opt out. */
   workspaceOnly?: boolean;
+  /** Workspace-relative protected paths (same semantics as `tools.fs.protectedPaths`). */
+  protectedWorkspaceRels?: string[];
   signal?: AbortSignal;
 };
 
@@ -78,11 +81,17 @@ const applyPatchSchema = Type.Object({
 });
 
 export function createApplyPatchTool(
-  options: { cwd?: string; sandbox?: SandboxApplyPatchConfig; workspaceOnly?: boolean } = {},
+  options: {
+    cwd?: string;
+    sandbox?: SandboxApplyPatchConfig;
+    workspaceOnly?: boolean;
+    protectedWorkspaceRels?: string[];
+  } = {},
 ): AgentTool<typeof applyPatchSchema, ApplyPatchToolDetails> {
   const cwd = options.cwd ?? process.cwd();
   const sandbox = options.sandbox;
   const workspaceOnly = options.workspaceOnly !== false;
+  const protectedWorkspaceRels = options.protectedWorkspaceRels;
 
   return {
     name: "apply_patch",
@@ -106,6 +115,7 @@ export function createApplyPatchTool(
         cwd,
         sandbox,
         workspaceOnly,
+        protectedWorkspaceRels,
         signal,
       });
 
@@ -115,6 +125,19 @@ export function createApplyPatchTool(
       };
     },
   };
+}
+
+function guardProtectedPatchTarget(resolvedAbs: string, options: ApplyPatchOptions): void {
+  const rels = options.protectedWorkspaceRels;
+  if (!rels?.length) {
+    return;
+  }
+  assertWorkspacePathNotProtected({
+    workspaceRoot: options.cwd,
+    absolutePath: resolvedAbs,
+    protectedRels: rels,
+    label: "apply_patch",
+  });
 }
 
 export async function applyPatch(
@@ -147,6 +170,7 @@ export async function applyPatch(
 
     if (hunk.kind === "add") {
       const target = await resolvePatchPath(hunk.path, options);
+      guardProtectedPatchTarget(target.resolved, options);
       await ensureDir(target.resolved, fileOps);
       await fileOps.writeFile(target.resolved, hunk.contents);
       recordSummary(summary, seen, "added", target.display);
@@ -155,18 +179,21 @@ export async function applyPatch(
 
     if (hunk.kind === "delete") {
       const target = await resolvePatchPath(hunk.path, options, "unlink");
+      guardProtectedPatchTarget(target.resolved, options);
       await fileOps.remove(target.resolved);
       recordSummary(summary, seen, "deleted", target.display);
       continue;
     }
 
     const target = await resolvePatchPath(hunk.path, options);
+    guardProtectedPatchTarget(target.resolved, options);
     const applied = await applyUpdateHunk(target.resolved, hunk.chunks, {
       readFile: (path) => fileOps.readFile(path),
     });
 
     if (hunk.movePath) {
       const moveTarget = await resolvePatchPath(hunk.movePath, options);
+      guardProtectedPatchTarget(moveTarget.resolved, options);
       await ensureDir(moveTarget.resolved, fileOps);
       await fileOps.writeFile(moveTarget.resolved, applied);
       await fileOps.remove(target.resolved);
