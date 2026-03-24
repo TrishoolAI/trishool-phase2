@@ -85,10 +85,12 @@ If the request includes an OpenAI `user` string, the Gateway derives a stable se
 
 Set `gateway.http.endpoints.chatCompletions.stateless` to opt into **strict** isolation for this endpoint:
 
-- `true` — default bundle: ignore `user` and `x-openclaw-session-key` (fresh session every request), skip session-store persistence for the call, merge tool policy to deny `write` / `edit` / `apply_patch` for that run only (workspace files such as `SOUL.md` stay readable), and disable compaction memory flush for that run.
-- Or use an object to tune flags: `ephemeralSession`, `denyWorkspaceWrites`, `skipSessionPersistence`, and `enabled` (set `enabled: false` to turn the feature off while keeping the object in config).
+- `true` — default bundle: ignore `user` and `x-openclaw-session-key` (fresh session every request), skip session-store persistence for the call, disable compaction memory flush for the run, and merge default `tools.fs.protectedPaths` so `write` / `edit` / `apply_patch` cannot mutate long-lived workspace files (`memory/`, `MEMORY.md`, `SOUL.md`, `IDENTITY.md`, etc.). `exec` gets a best-effort string preflight for those paths; with Docker sandboxing, matching paths also receive extra **read-only** submounts so the kernel blocks writes even via the shell.
+- Or use an object to tune flags: `ephemeralSession`, `skipSessionPersistence`, `protectWorkspaceStateFiles` (set `false` to skip default protected paths while keeping memory-flush off), and `enabled` (set `enabled: false` to turn the feature off while keeping the object in config).
 
 Turn it off by removing the key or setting `stateless` to `false`.
+
+Global override: set `tools.fs.protectedPaths` to extend or replace (merged with stateless defaults when stateless protection is on) for any agent run using that config.
 
 ## Streaming (SSE)
 

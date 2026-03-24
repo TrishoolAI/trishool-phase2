@@ -232,8 +232,10 @@ export async function agentCommand(
   if (opts.providerApiKeyOverrides && Object.keys(opts.providerApiKeyOverrides).length > 0) {
     cfg = mergeProviderApiKeyOverrides(cfg, opts.providerApiKeyOverrides);
   }
-  if (opts.statelessHttp?.denyWorkspaceWrites) {
-    cfg = mergeStatelessHttpAgentConfig(cfg);
+  if (opts.statelessHttp?.mergeStatelessHttpDefaults) {
+    cfg = mergeStatelessHttpAgentConfig(cfg, {
+      protectWorkspaceStateFiles: opts.statelessHttp.protectWorkspaceStateFiles !== false,
+    });
   }
   const agentIdOverrideRaw = opts.agentId?.trim();
   const agentIdOverride = agentIdOverrideRaw ? normalizeAgentId(agentIdOverrideRaw) : undefined;

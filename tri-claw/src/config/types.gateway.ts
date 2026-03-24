@@ -204,15 +204,15 @@ export type GatewayHttpChatCompletionsStatelessConfig = {
    */
   ephemeralSession?: boolean;
   /**
-   * For each completion request only, deny workspace-mutating tools (`write`, `edit`, `apply_patch`).
-   * Default: true when stateless mode is active.
-   */
-  denyWorkspaceWrites?: boolean;
-  /**
    * Skip session store and session-file persistence for the request (no durable session metadata).
    * Default: true when stateless mode is active.
    */
   skipSessionPersistence?: boolean;
+  /**
+   * Merge default `tools.fs.protectedPaths` for long-lived workspace files (`memory/`, `MEMORY.md`,
+   * `SOUL.md`, etc.) for this HTTP request only. Default: true when stateless mode is active.
+   */
+  protectWorkspaceStateFiles?: boolean;
 };
 
 export type GatewayHttpChatCompletionsConfig = {
@@ -223,7 +223,8 @@ export type GatewayHttpChatCompletionsConfig = {
   enabled?: boolean;
   /**
    * Stateless Chat Completions: optional isolation so each HTTP call does not reuse prior
-   * conversation state and does not persist session rows or mutate workspace files.
+   * conversation state, does not persist session rows, and (by default) protects long-lived
+   * workspace files via `tools.fs.protectedPaths` plus exec preflight / sandbox RO submounts.
    * Set to `true` for defaults, or use an object to tune individual flags.
    */
   stateless?: boolean | GatewayHttpChatCompletionsStatelessConfig;

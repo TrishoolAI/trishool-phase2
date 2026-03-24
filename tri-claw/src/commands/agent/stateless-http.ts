@@ -1,31 +1,53 @@
 import type { OpenClawConfig } from "../../config/types.js";
+import { DEFAULT_WORKSPACE_PROTECTED_REL_PATHS } from "../../agents/tool-protected-paths.js";
 
-const STATELESS_DENY_TOOLS = ["write", "edit", "apply_patch"] as const;
-
-/**
- * Per-run config overlay for stateless HTTP chat completions: block workspace mutations and
- * compaction memory flush while keeping SOUL.md / identity files readable as usual.
- */
-export function mergeStatelessHttpAgentConfig(cfg: OpenClawConfig): OpenClawConfig {
+export function mergeStatelessHttpAgentConfig(
+  cfg: OpenClawConfig,
+  options?: { protectWorkspaceStateFiles?: boolean },
+): OpenClawConfig {
+  const protect = options?.protectWorkspaceStateFiles !== false;
   const defaults = cfg.agents?.defaults;
-  const existingDeny = defaults?.tools?.deny ?? [];
-  const deny = [...new Set([...existingDeny.map(String), ...STATELESS_DENY_TOOLS])];
+  const compactionPatch = {
+    compaction: {
+      ...defaults?.compaction,
+      memoryFlush: {
+        ...defaults?.compaction?.memoryFlush,
+        enabled: false,
+      },
+    },
+  };
+  if (!protect) {
+    return {
+      ...cfg,
+      agents: {
+        ...cfg.agents,
+        defaults: {
+          ...defaults,
+          ...compactionPatch,
+        },
+      },
+    };
+  }
+  const existingProtected = defaults?.tools?.fs?.protectedPaths ?? [];
+  const mergedProtected = [
+    ...new Set([
+      ...DEFAULT_WORKSPACE_PROTECTED_REL_PATHS.map(String),
+      ...existingProtected.map(String),
+    ]),
+  ];
   return {
     ...cfg,
     agents: {
       ...cfg.agents,
       defaults: {
         ...defaults,
-        compaction: {
-          ...defaults?.compaction,
-          memoryFlush: {
-            ...defaults?.compaction?.memoryFlush,
-            enabled: false,
-          },
-        },
+        ...compactionPatch,
         tools: {
           ...defaults?.tools,
-          deny,
+          fs: {
+            ...defaults?.tools?.fs,
+            protectedPaths: mergedProtected,
+          },
         },
       },
     },

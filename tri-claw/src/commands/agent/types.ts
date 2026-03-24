@@ -83,10 +83,12 @@ export type AgentCommandOpts = {
    */
   providerApiKeyOverrides?: Record<string, string>;
   /**
-   * OpenAI `/v1/chat/completions` stateless mode: optional non-durable session and read-only workspace tools.
+   * OpenAI `/v1/chat/completions` stateless mode: merge ephemeral-session defaults for this run.
    */
   statelessHttp?: {
-    denyWorkspaceWrites: boolean;
     skipSessionPersistence: boolean;
+    mergeStatelessHttpDefaults: boolean;
+    /** When false, skip default protected workspace paths (still disables compaction memory flush). */
+    protectWorkspaceStateFiles?: boolean;
   };
 };

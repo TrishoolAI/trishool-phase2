@@ -3,15 +3,19 @@ import type { OpenClawConfig } from "../config/types.js";
 const OFF: ResolvedGatewayChatCompletionsStateless = {
   enabled: false,
   ephemeralSession: false,
-  denyWorkspaceWrites: false,
   skipSessionPersistence: false,
+  protectWorkspaceStateFiles: false,
 };
 
 export type ResolvedGatewayChatCompletionsStateless = {
   enabled: boolean;
   ephemeralSession: boolean;
-  denyWorkspaceWrites: boolean;
   skipSessionPersistence: boolean;
+  /**
+   * Merge default `tools.fs.protectedPaths` for persona/memory/bootstrap files (and Docker :ro submounts when sandboxed).
+   * Default true when stateless mode is active.
+   */
+  protectWorkspaceStateFiles: boolean;
 };
 
 export function resolveGatewayChatCompletionsStateless(
@@ -25,8 +29,8 @@ export function resolveGatewayChatCompletionsStateless(
     return {
       enabled: true,
       ephemeralSession: true,
-      denyWorkspaceWrites: true,
       skipSessionPersistence: true,
+      protectWorkspaceStateFiles: true,
     };
   }
   if (raw.enabled === false) {
@@ -35,7 +39,7 @@ export function resolveGatewayChatCompletionsStateless(
   return {
     enabled: true,
     ephemeralSession: raw.ephemeralSession !== false,
-    denyWorkspaceWrites: raw.denyWorkspaceWrites !== false,
     skipSessionPersistence: raw.skipSessionPersistence !== false,
+    protectWorkspaceStateFiles: raw.protectWorkspaceStateFiles !== false,
   };
 }
