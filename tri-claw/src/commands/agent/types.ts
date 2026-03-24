@@ -82,4 +82,11 @@ export type AgentCommandOpts = {
    * Example: { chutes: "cpk_..." } for ephemeral Chutes auth.
    */
   providerApiKeyOverrides?: Record<string, string>;
+  /**
+   * OpenAI `/v1/chat/completions` stateless mode: optional non-durable session and read-only workspace tools.
+   */
+  statelessHttp?: {
+    denyWorkspaceWrites: boolean;
+    skipSessionPersistence: boolean;
+  };
 };

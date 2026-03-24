@@ -11,7 +11,10 @@
     },
     "http": {
       "endpoints": {
-        "chatCompletions": { "enabled": true }
+        "chatCompletions": {
+          "enabled": true,
+          "stateless": true
+        }
       }
     },
     "tools": {

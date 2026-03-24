@@ -195,12 +195,38 @@ export type GatewayReloadConfig = {
   debounceMs?: number;
 };
 
+export type GatewayHttpChatCompletionsStatelessConfig = {
+  /** When false, disables stateless behavior for this endpoint. Default: true when using the object form. */
+  enabled?: boolean;
+  /**
+   * Ignore OpenAI `user` and `x-openclaw-session-key`; use a fresh session per request.
+   * Default: true when stateless mode is active.
+   */
+  ephemeralSession?: boolean;
+  /**
+   * For each completion request only, deny workspace-mutating tools (`write`, `edit`, `apply_patch`).
+   * Default: true when stateless mode is active.
+   */
+  denyWorkspaceWrites?: boolean;
+  /**
+   * Skip session store and session-file persistence for the request (no durable session metadata).
+   * Default: true when stateless mode is active.
+   */
+  skipSessionPersistence?: boolean;
+};
+
 export type GatewayHttpChatCompletionsConfig = {
   /**
    * If false, the Gateway will not serve `POST /v1/chat/completions`.
    * Default: false when absent.
    */
   enabled?: boolean;
+  /**
+   * Stateless Chat Completions: optional isolation so each HTTP call does not reuse prior
+   * conversation state and does not persist session rows or mutate workspace files.
+   * Set to `true` for defaults, or use an object to tune individual flags.
+   */
+  stateless?: boolean | GatewayHttpChatCompletionsStatelessConfig;
 };
 
 export type GatewayHttpResponsesConfig = {

@@ -19,6 +19,7 @@ import type { ResolvedGatewayAuth } from "./auth.js";
 import { sendJson, setSseHeaders, writeDone } from "./http-common.js";
 import { handleGatewayPostJsonEndpoint } from "./http-endpoint-helpers.js";
 import { resolveAgentIdForRequest, resolveSessionKey } from "./http-utils.js";
+import type { ResolvedGatewayChatCompletionsStateless } from "./chat-completions-stateless.js";
 
 type OpenAiHttpOptions = {
   auth: ResolvedGatewayAuth;
@@ -26,6 +27,7 @@ type OpenAiHttpOptions = {
   trustedProxies?: string[];
   allowRealIpFallback?: boolean;
   rateLimiter?: AuthRateLimiter;
+  chatCompletionsStateless?: ResolvedGatewayChatCompletionsStateless;
 };
 
 type OpenAiChatMessage = {
@@ -76,6 +78,10 @@ function buildAgentCommandInput(params: {
   sessionKey: string;
   runId: string;
   providerApiKeyOverrides?: Record<string, string>;
+  statelessHttp?: {
+    denyWorkspaceWrites: boolean;
+    skipSessionPersistence: boolean;
+  };
 }) {
   return {
     message: params.prompt.message,
@@ -89,6 +95,7 @@ function buildAgentCommandInput(params: {
       Object.keys(params.providerApiKeyOverrides).length > 0 && {
         providerApiKeyOverrides: params.providerApiKeyOverrides,
       }),
+    ...(params.statelessHttp && { statelessHttp: params.statelessHttp }),
   };
 }
 
@@ -211,8 +218,18 @@ function resolveOpenAiSessionKey(params: {
   req: IncomingMessage;
   agentId: string;
   user?: string | undefined;
+  stateless?: ResolvedGatewayChatCompletionsStateless;
 }): string {
-  return resolveSessionKey({ ...params, prefix: "openai" });
+  const forceEphemeral = Boolean(
+    params.stateless?.enabled && params.stateless.ephemeralSession,
+  );
+  return resolveSessionKey({
+    req: params.req,
+    agentId: params.agentId,
+    user: params.user,
+    prefix: "openai",
+    forceEphemeral,
+  });
 }
 
 function coerceRequest(val: unknown): OpenAiChatCompletionRequest {
@@ -264,7 +281,13 @@ export async function handleOpenAiHttpRequest(
   const user = typeof payload.user === "string" ? payload.user : undefined;
 
   const agentId = resolveAgentIdForRequest({ req, model });
-  const sessionKey = resolveOpenAiSessionKey({ req, agentId, user });
+  const st = opts.chatCompletionsStateless;
+  const sessionKey = resolveOpenAiSessionKey({
+    req,
+    agentId,
+    user,
+    stateless: st,
+  });
   const prompt = buildAgentPrompt(payload.messages);
   if (!prompt.message) {
     sendJson(res, 400, {
@@ -281,11 +304,19 @@ export async function handleOpenAiHttpRequest(
   const providerApiKeyOverrides =
     chutesKey != null && chutesKey.length > 0 ? { chutes: chutesKey } : undefined;
   const deps = createDefaultDeps();
+  const statelessHttp =
+    st?.enabled && (st.denyWorkspaceWrites || st.skipSessionPersistence)
+      ? {
+          denyWorkspaceWrites: st.denyWorkspaceWrites,
+          skipSessionPersistence: st.skipSessionPersistence,
+        }
+      : undefined;
   const commandInput = buildAgentCommandInput({
     prompt,
     sessionKey,
     runId,
     providerApiKeyOverrides,
+    statelessHttp,
   });
 
   if (!stream) {

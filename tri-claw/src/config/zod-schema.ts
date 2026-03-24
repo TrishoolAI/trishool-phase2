@@ -581,6 +581,19 @@ export const OpenClawSchema = z
                 chatCompletions: z
                   .object({
                     enabled: z.boolean().optional(),
+                    stateless: z
+                      .union([
+                        z.boolean(),
+                        z
+                          .object({
+                            enabled: z.boolean().optional(),
+                            ephemeralSession: z.boolean().optional(),
+                            denyWorkspaceWrites: z.boolean().optional(),
+                            skipSessionPersistence: z.boolean().optional(),
+                          })
+                          .strict(),
+                      ])
+                      .optional(),
                   })
                   .strict()
                   .optional(),

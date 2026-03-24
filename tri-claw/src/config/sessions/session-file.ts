@@ -12,8 +12,11 @@ export async function resolveAndPersistSessionFile(params: {
   sessionsDir?: string;
   fallbackSessionFile?: string;
   activeSessionKey?: string;
+  /** When false, compute paths only; do not mutate the session store on disk or in memory. */
+  persistToDisk?: boolean;
 }): Promise<{ sessionFile: string; sessionEntry: SessionEntry }> {
   const { sessionId, sessionKey, sessionStore, storePath } = params;
+  const persistToDisk = params.persistToDisk !== false;
   const baseEntry = params.sessionEntry ??
     sessionStore[sessionKey] ?? { sessionId, updatedAt: Date.now() };
   const fallbackSessionFile = params.fallbackSessionFile?.trim();
@@ -31,6 +34,9 @@ export async function resolveAndPersistSessionFile(params: {
     updatedAt: Date.now(),
     sessionFile,
   };
+  if (!persistToDisk) {
+    return { sessionFile, sessionEntry: persistedEntry };
+  }
   if (baseEntry.sessionId !== sessionId || baseEntry.sessionFile !== sessionFile) {
     sessionStore[sessionKey] = persistedEntry;
     await updateSessionStore(

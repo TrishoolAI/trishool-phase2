@@ -321,6 +321,8 @@ export const FIELD_HELP: Record<string, string> = {
     "Disables Control UI device identity checks and relies on token/password only. Use only for short-lived debugging on trusted networks, then turn it off immediately.",
   "gateway.http.endpoints.chatCompletions.enabled":
     "Enable the OpenAI-compatible `POST /v1/chat/completions` endpoint (default: false).",
+  "gateway.http.endpoints.chatCompletions.stateless":
+    "Stateless Chat Completions: set `true` for defaults (fresh session per request, no session-store persistence, deny workspace write/edit/apply_patch), or use an object with `ephemeralSession`, `denyWorkspaceWrites`, and `skipSessionPersistence` to tune behavior.",
   "gateway.reload.mode":
     'Controls how config edits are applied: "off" ignores live edits, "restart" always restarts, "hot" applies in-process, and "hybrid" tries hot then restarts if required. Keep "hybrid" for safest routine updates.',
   "gateway.reload.debounceMs": "Debounce window (ms) before applying config changes.",
