@@ -4,12 +4,9 @@
 #   docker build -f Dockerfile.lean -t openclaw:lean .
 #   OPENCLAW_IMAGE=openclaw:lean docker compose -f docker-compose.yml -f docker-compose.lean.yml up -d
 #
-# Pre-configure Chutes via ../.env.tri-claw (repo-root; this compose file does not load trishool/.env):
-#   CHUTES_BASE_URL=https://llm.chutes.ai/v1
-#   CHUTES_DEFAULT_MODEL_ID=zai-org/GLM-4.7-TEE
-#   CHUTES_DEFAULT_MODEL_REF=chutes/zai-org/GLM-4.7-TEE
-#   CHUTES_FAST_MODEL_ID=zai-org/GLM-4.7-Flash
+# Pre-configure Chutes auth via ../.env.tri-claw (repo-root; this compose file does not load trishool/.env):
 #   CHUTES_API_KEY=<your-key>  (optional for /v1/chat/completions: send X-Chutes-Api-Key per request instead)
+# Model base URL and fallback chain are defined in tri-claw/docker/openclaw.lean.json.
 #
 # After setup, all CLI commands run inside the gateway container:
 #   docker compose -f docker-compose.yml -f docker-compose.lean.yml exec openclaw-gateway node dist/index.js tui

@@ -33,6 +33,23 @@ function requireNumber(
   return value;
 }
 
+function parseModelChain(record: Record<string, unknown>, ctx: string): string[] {
+  const modelsRaw = record.models;
+  if (Array.isArray(modelsRaw)) {
+    const models = modelsRaw
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0);
+    if (models.length === 0) {
+      throw new ConfigError(`Missing or invalid ${ctx}.models.`);
+    }
+    return models;
+  }
+
+  const model = requireString(record, "model", ctx);
+  return [model];
+}
+
 export function resolveConfigPath(env: NodeJS.ProcessEnv): string {
   return resolve(env.JUDGE_CONFIG_PATH ?? DEFAULT_CONFIG_PATH);
 }
@@ -70,6 +87,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new ConfigError("Missing or invalid judge config.");
   }
 
+  const modelChain = parseModelChain(judge, "judge");
+
   return {
     server: {
       host: requireString(server, "host", "server"),
@@ -77,7 +96,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     },
     judge: {
       baseURL: requireString(judge, "baseURL", "judge"),
-      model: requireString(judge, "model", "judge"),
+      models: modelChain,
+      model: modelChain[0],
       timeoutMs: requireNumber(judge, "timeoutMs", "judge"),
       maxRetries: requireNumber(judge, "maxRetries", "judge"),
       temperature:
