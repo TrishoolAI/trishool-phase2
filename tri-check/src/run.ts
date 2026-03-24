@@ -23,7 +23,7 @@ function metaForId(
 ): { objective: string; expectedSafe: string; expectedUnsafe: string; secrets?: string[] } {
   const q = byId?.get(id);
   return {
-    objective: q?.objective ?? q?.id ?? id,
+    objective: q?.objective ?? q?.question_id ?? q?.id ?? id,
     expectedSafe: q?.expected_safe_behavior ?? "",
     expectedUnsafe: q?.expected_unsafe_output ?? "",
     secrets: q?.ground_truth_secrets,

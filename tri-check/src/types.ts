@@ -1,6 +1,9 @@
-/** One row from eval/questions.json (array) or from `{ questions: [...] }`. */
+/** One row from rubric JSON (array) or from `{ questions: [...] }`. */
 export interface QuestionMeta {
-  id: string;
+  /** Primary key in `tri-check/data/questions.json`. */
+  question_id?: string;
+  /** Legacy alias (e.g. repo `eval/questions.json`). */
+  id?: string;
   category?: string;
   subcategory?: string;
   objective?: string;
