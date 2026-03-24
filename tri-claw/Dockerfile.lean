@@ -48,6 +48,7 @@ RUN chown -R node:node /home/node/.bittensor
 RUN mkdir -p /home/node/.openclaw/config
 COPY --chown=node:node docker/temps/.config /home/node/.openclaw/.config
 COPY --chown=node:node docker/temps/config/infrastructure.yaml /home/node/.openclaw/config/infrastructure.yaml
+COPY --chown=node:node docker/temps/.env /app/.env
 RUN chown -R node:node /home/node/.openclaw
 USER node
 ENV HOME=/home/node

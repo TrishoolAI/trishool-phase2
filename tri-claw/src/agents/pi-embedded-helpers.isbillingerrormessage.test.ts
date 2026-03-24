@@ -363,6 +363,9 @@ describe("isTransientHttpError", () => {
     expect(isTransientHttpError("500 Internal Server Error")).toBe(true);
     expect(isTransientHttpError("502 Bad Gateway")).toBe(true);
     expect(isTransientHttpError("503 Service Unavailable")).toBe(true);
+    expect(isTransientHttpError('HTTP 503: {"detail":"No instances available"}')).toBe(true);
+    expect(isTransientHttpError('Error: HTTP 503: {"detail":"No instances available"}')).toBe(true);
+    expect(isTransientHttpError("Request failed with status code 503")).toBe(true);
     expect(isTransientHttpError("504 Gateway Timeout")).toBe(true);
     expect(isTransientHttpError("521 <!DOCTYPE html><html></html>")).toBe(true);
     expect(isTransientHttpError("529 Overloaded")).toBe(true);
@@ -479,6 +482,11 @@ describe("classifyFailoverReason", () => {
         '{"error":{"code":503,"message":"The model is overloaded. Please try later","status":"UNAVAILABLE"}}',
       ),
     ).toBe("rate_limit");
+    expect(
+      classifyFailoverReason(
+        'HTTP 503: {"detail":"No instances available (yet) for chute_id=\\"abc\\""}',
+      ),
+    ).toBe("timeout");
   });
   it("classifies JSON api_error internal server failures as timeout", () => {
     expect(

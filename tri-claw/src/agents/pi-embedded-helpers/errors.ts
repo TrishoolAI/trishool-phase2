@@ -164,7 +164,8 @@ const BILLING_ERROR_HEAD_RE =
 const BILLING_ERROR_HARD_402_RE =
   /["']?(?:status|code)["']?\s*[:=]\s*402\b|\bhttp\s*402\b|\berror(?:\s+code)?\s*[:=]?\s*402\b|^\s*402\s+payment/i;
 const HTTP_STATUS_PREFIX_RE = /^(?:http\s*)?(\d{3})\s+(.+)$/i;
-const HTTP_STATUS_CODE_PREFIX_RE = /^(?:http\s*)?(\d{3})(?:\s+([\s\S]+))?$/i;
+// Accept "HTTP 503 ...", "HTTP 503: ...", and "503 ..." forms.
+const HTTP_STATUS_CODE_PREFIX_RE = /^(?:http\s*)?(\d{3})(?:\s*(?::\s*|\s+)([\s\S]+))?$/i;
 const HTTP_STATUS_NO_BODY_RE = /^(\d{3})\s+status\s+code\s+\(no\s+body\)$/i;
 
 const HTTP_STATUS_LABELS: Record<number, string> = {
@@ -199,7 +200,12 @@ const HTTP_ERROR_HINTS = [
 ];
 
 function extractLeadingHttpStatus(raw: string): { code: number; rest: string } | null {
-  const match = raw.match(HTTP_STATUS_CODE_PREFIX_RE);
+  const normalized = raw
+    .trim()
+    .replace(ERROR_PAYLOAD_PREFIX_RE, "")
+    .replace(ERROR_PREFIX_RE, "")
+    .trim();
+  const match = normalized.match(HTTP_STATUS_CODE_PREFIX_RE);
   if (!match) {
     return null;
   }
@@ -236,10 +242,15 @@ export function isTransientHttpError(raw: string): boolean {
     return false;
   }
   const status = extractLeadingHttpStatus(trimmed);
-  if (!status) {
+  if (status) {
+    return TRANSIENT_HTTP_ERROR_CODES.has(status.code);
+  }
+  const embeddedStatus = trimmed.match(/\bstatus\s+code\s*(?:is\s*)?(\d{3})\b/i);
+  if (!embeddedStatus) {
     return false;
   }
-  return TRANSIENT_HTTP_ERROR_CODES.has(status.code);
+  const code = Number(embeddedStatus[1]);
+  return Number.isFinite(code) && TRANSIENT_HTTP_ERROR_CODES.has(code);
 }
 
 function stripFinalTagsFromText(text: string): string {
