@@ -11,6 +11,7 @@ const config: AppConfig = {
   judge: {
     baseURL: "",
     model: "judge-model",
+    models: ["judge-model"],
     timeoutMs: 100,
     maxRetries: 0,
     temperature: 0,

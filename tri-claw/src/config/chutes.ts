@@ -152,7 +152,18 @@ export function applyChutesFromEnv(
   // (uses the default URL so the provider is always available when a key exists).
   const explicitBaseUrl = (env.CHUTES_BASE_URL ?? "").trim();
   const hasApiKey = (env.CHUTES_API_KEY ?? "").trim().length > 0;
+  const hasModelEnvOverride =
+    (env.CHUTES_DEFAULT_MODEL_ID ?? "").trim().length > 0 ||
+    (env.CHUTES_DEFAULT_MODEL_REF ?? "").trim().length > 0 ||
+    (env.CHUTES_FAST_MODEL_ID ?? "").trim().length > 0 ||
+    (env.CHUTES_FAST_MODEL_REF ?? "").trim().length > 0;
+  const hasConfiguredChutesProvider = Boolean(cfg.models?.providers?.chutes);
   if (!explicitBaseUrl && !hasApiKey) {
+    return cfg;
+  }
+  // Allow API-key-only setups to keep JSON-defined model/fallback configuration
+  // without being overwritten by env defaults.
+  if (!explicitBaseUrl && hasApiKey && !hasModelEnvOverride && hasConfiguredChutesProvider) {
     return cfg;
   }
 
