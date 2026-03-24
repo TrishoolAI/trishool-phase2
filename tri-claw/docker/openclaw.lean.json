@@ -28,14 +28,16 @@
     "defaults": {
       "workspace": "/home/node/.openclaw/workspace",
       "model": {
-        "primary": "chutes/Qwen/Qwen3-32B-TEE",
+        "primary": "chutes/Qwen/Qwen3.5-397B-A17B-TEE",
         "fallbacks": [
-          "chutes/chutesai/Mistral-Small-3.1-24B-Instruct-2503-TEE"
+          "chutes/Qwen/Qwen3-32B-TEE",
+          "chutes/Qwen/Qwen3-235B-A22B-Instruct-2507-TEE"
         ]
       },
       "models": {
-        "chutes-default": { "alias": "chutes/Qwen/Qwen3-32B-TEE" },
-        "chutes-fast": { "alias": "chutes/chutesai/Mistral-Small-3.1-24B-Instruct-2503-TEE" }
+        "chutes-default": { "alias": "chutes/Qwen/Qwen3.5-397B-A17B-TEE" },
+        "chutes-235b": { "alias": "chutes/Qwen/Qwen3-235B-A22B-Instruct-2507-TEE" },
+        "chutes-fast": { "alias": "chutes/Qwen/Qwen3-32B-TEE" }
       }
     }
   },
@@ -83,8 +85,26 @@
         "auth": "api-key",
         "models": [
           {
-            "id": "chutesai/Mistral-Small-3.1-24B-Instruct-2503-TEE",
-            "name": "Chutes Mistral-Small-3.1-24B-Instruct-2503-TEE",
+            "id": "Qwen/Qwen3.5-397B-A17B-TEE",
+            "name": "Chutes Qwen3.5-397B-A17B-TEE",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 256000,
+            "maxTokens": 16384
+          },
+          {
+            "id": "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE",
+            "name": "Chutes Qwen3-235B-A22B-Instruct-2507-TEE",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 256000,
+            "maxTokens": 16384
+          },
+          {
+            "id": "Qwen/Qwen3-32B-TEE",
+            "name": "Chutes Qwen3-32B-TEE",
             "reasoning": false,
             "input": ["text"],
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
@@ -92,8 +112,17 @@
             "maxTokens": 16384
           },
           {
-            "id": "Qwen/Qwen3-32B-TEE",
-            "name": "Chutes Qwen3-32B-TEE",
+            "id": "openai/gpt-oss-20b-TEE",
+            "name": "Chutes openai/gpt-oss-20b-TEE",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 128000,
+            "maxTokens": 16384
+          },
+          {
+            "id": "chutesai/Mistral-Small-3.1-24B-Instruct-2503-TEE",
+            "name": "Chutes Mistral-Small-3.1-24B-Instruct-2503-TEE",
             "reasoning": false,
             "input": ["text"],
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
