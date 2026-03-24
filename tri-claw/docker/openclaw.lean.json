@@ -28,16 +28,14 @@
     "defaults": {
       "workspace": "/home/node/.openclaw/workspace",
       "model": {
-        "primary": "chutes/chutesai/Mistral-Small-3.1-24B-Instruct-2503-TEE",
+        "primary": "chutes/Qwen/Qwen3-32B-TEE",
         "fallbacks": [
-          "chutes/Qwen/Qwen3-32B-TEE",
-          "chutes/unsloth/gemma-3-27b-it"
+          "chutes/chutesai/Mistral-Small-3.1-24B-Instruct-2503-TEE"
         ]
       },
       "models": {
-        "chutes-default": { "alias": "chutes/chutesai/Mistral-Small-3.1-24B-Instruct-2503-TEE" },
-        "chutes-fast": { "alias": "chutes/Qwen/Qwen3-32B-TEE" },
-        "chutes-third": { "alias": "chutes/unsloth/gemma-3-27b-it" }
+        "chutes-default": { "alias": "chutes/Qwen/Qwen3-32B-TEE" },
+        "chutes-fast": { "alias": "chutes/chutesai/Mistral-Small-3.1-24B-Instruct-2503-TEE" }
       }
     }
   },
@@ -53,7 +51,7 @@
       "guard-model": {
         "enabled": true,
         "config": {
-          "enabled": true,
+          "enabled": false,
           "model": "chutes/Qwen/Qwen3Guard-Gen-0.6B",
           "logDecisions": true,
           "policy": {

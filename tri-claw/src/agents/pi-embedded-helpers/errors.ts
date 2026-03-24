@@ -1060,6 +1060,13 @@ export function isModelNotFoundErrorMessage(raw: string): boolean {
     return true;
   }
 
+  // Bare "404 status code (no body)" from providers that return 404 with an empty
+  // response body (e.g. Chutes for an unknown model ID). The regex above misses
+  // this because the raw string lacks "not found" — only "no body".
+  if (HTTP_STATUS_NO_BODY_RE.test(raw) && /^404\b/.test(raw)) {
+    return true;
+  }
+
   return false;
 }
 

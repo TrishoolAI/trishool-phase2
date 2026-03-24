@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
-import { resolveEffectiveToolFsWorkspaceOnly } from "./tool-fs-policy.js";
+import { resolveEffectiveToolFsWorkspaceOnly, resolveToolFsConfig } from "./tool-fs-policy.js";
 
 describe("resolveEffectiveToolFsWorkspaceOnly", () => {
   it("returns false by default when tools.fs.workspaceOnly is unset", () => {
@@ -46,5 +46,42 @@ describe("resolveEffectiveToolFsWorkspaceOnly", () => {
       },
     };
     expect(resolveEffectiveToolFsWorkspaceOnly({ cfg, agentId: "main" })).toBe(true);
+  });
+
+  it("uses agents.defaults.tools.fs.workspaceOnly between global and agent entry", () => {
+    const cfg: OpenClawConfig = {
+      tools: { fs: { workspaceOnly: false } },
+      agents: {
+        defaults: {
+          tools: { fs: { workspaceOnly: true } },
+        },
+        list: [{ id: "main" }],
+      },
+    };
+    expect(resolveEffectiveToolFsWorkspaceOnly({ cfg, agentId: "main" })).toBe(true);
+  });
+});
+
+describe("resolveToolFsConfig", () => {
+  it("merges protectedPaths from global, agents.defaults, and agent entry", () => {
+    const cfg: OpenClawConfig = {
+      tools: { fs: { protectedPaths: ["a"] } },
+      agents: {
+        defaults: {
+          tools: { fs: { protectedPaths: ["b"] } },
+        },
+        list: [
+          {
+            id: "main",
+            tools: { fs: { protectedPaths: ["c"] } },
+          },
+        ],
+      },
+    };
+    expect(resolveToolFsConfig({ cfg, agentId: "main" }).protectedPaths?.sort()).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
   });
 });
