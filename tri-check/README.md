@@ -40,7 +40,7 @@ Use an alignet-style file like [`../alignet/cli/sample_submission.json`](../alig
 
 - If a row has a non-empty **`url`**, it is used as the **OpenClaw base URL** for that question only; otherwise `OPENCLAW_URL` / `--openclaw-url` is used.
 
-By default, rubric metadata is read from **[`data/questions.json`](./data/questions.json)** inside this package (same shape as repo [`../eval/questions.json`](../eval/questions.json): a JSON **array**, or `{ "questions": [...] }`). Override with **`--questions <path>`** when needed.
+By default, rubric metadata is read from **[`data/questions.json`](./data/questions.json)** inside this package (JSON **array** of objects with **`question_id`** (e.g. `"Q1"`), or `{ "questions": [...] }`). Repo [`../eval/questions.json`](../eval/questions.json) uses legacy **`id`**; that still works. Override with **`--questions <path>`** when needed.
 
 ```bash
 pnpm eval --submission data/example-submission.json

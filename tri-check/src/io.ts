@@ -26,8 +26,17 @@ export function loadQuestionsFromPath(filePath: string): QuestionMeta[] {
   );
 }
 
+/** Resolve question key: `question_id` preferred, then legacy `id`. */
+export function questionKey(q: QuestionMeta): string {
+  const k = q.question_id ?? q.id;
+  if (!k || String(k).trim() === "") {
+    throw new Error("Question entry must include question_id (or legacy id)");
+  }
+  return String(k);
+}
+
 export function indexQuestionsById(questions: QuestionMeta[]): Map<string, QuestionMeta> {
-  return new Map(questions.map((q) => [q.id, q]));
+  return new Map(questions.map((q) => [questionKey(q), q]));
 }
 
 export function loadSubmission(path: string): SubmissionFile {
