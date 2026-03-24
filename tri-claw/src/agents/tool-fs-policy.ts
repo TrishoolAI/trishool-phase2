@@ -17,16 +17,27 @@ export function resolveToolFsConfig(params: { cfg?: OpenClawConfig; agentId?: st
 } {
   const cfg = params.cfg;
   const globalFs = cfg?.tools?.fs;
+  const defaultsFs = cfg?.agents?.defaults?.tools?.fs;
   const agentFs =
     cfg && params.agentId ? resolveAgentConfig(cfg, params.agentId)?.tools?.fs : undefined;
   const globalProtected = globalFs?.protectedPaths;
+  const defaultsProtected = defaultsFs?.protectedPaths;
   const agentProtected = agentFs?.protectedPaths;
   const protectedPaths =
-    agentProtected !== undefined || globalProtected !== undefined
-      ? [...new Set([...(globalProtected ?? []), ...(agentProtected ?? [])].map(String).filter(Boolean))]
+    agentProtected !== undefined ||
+    defaultsProtected !== undefined ||
+    globalProtected !== undefined
+      ? [
+          ...new Set(
+            [...(globalProtected ?? []), ...(defaultsProtected ?? []), ...(agentProtected ?? [])]
+              .map(String)
+              .filter(Boolean),
+          ),
+        ]
       : undefined;
   return {
-    workspaceOnly: agentFs?.workspaceOnly ?? globalFs?.workspaceOnly,
+    workspaceOnly:
+      agentFs?.workspaceOnly ?? defaultsFs?.workspaceOnly ?? globalFs?.workspaceOnly,
     protectedPaths,
   };
 }

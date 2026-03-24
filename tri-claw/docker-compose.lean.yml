@@ -20,7 +20,6 @@ networks:
 
 services:
   openclaw-gateway:
-    volumes: !reset []
     # Docker writes logs to its own path; rotation keeps them bounded. To get a file
     # at a path you choose, stream with: docker compose ... logs -f 2>&1 | tee gateway.log
     logging:
@@ -48,7 +47,6 @@ services:
 
   # Suppresses base-file token warning; not used in lean workflow (use exec into gateway instead).
   openclaw-cli:
-    volumes: !reset []
     environment:
       OPENCLAW_GATEWAY_TOKEN: ""
     image: ${OPENCLAW_IMAGE:-openclaw:lean}

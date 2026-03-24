@@ -1,6 +1,15 @@
 import type { StreamFn } from "@mariozechner/pi-agent-core";
-import type { SimpleStreamOptions } from "@mariozechner/pi-ai";
-import { streamSimple } from "@mariozechner/pi-ai";
+import type {
+  AssistantMessage,
+  Context,
+  Model,
+  OpenAICompletionsCompat,
+  SimpleStreamOptions,
+  ToolCall,
+  Usage,
+} from "@mariozechner/pi-ai";
+import { createAssistantMessageEventStream, getEnvApiKey, streamSimple } from "@mariozechner/pi-ai";
+import { convertMessages } from "@mariozechner/pi-ai/dist/providers/openai-completions.js";
 import type { ThinkLevel } from "../../auto-reply/thinking.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { log } from "./logger.js";
@@ -626,6 +635,396 @@ function createZaiToolStreamWrapper(
 }
 
 /**
+ * Chutes accepts OpenAI-compatible tool calls in non-stream mode, but its
+ * streaming SSE responses can omit `tool_calls` entirely and only emit text.
+ * Run Chutes requests via non-streaming fetch and synthesize the normal Pi
+ * event stream so the agent loop can still execute tools.
+ */
+function createChutesNonStreamingWrapper(
+  baseStreamFn: StreamFn | undefined,
+  toolChoice: string,
+): StreamFn {
+  const underlying = baseStreamFn ?? streamSimple;
+  return (model, context, options) => {
+    if (model.provider !== "chutes" || model.api !== "openai-completions") {
+      return underlying(model, context, options);
+    }
+
+    const stream = createAssistantMessageEventStream();
+    void (async () => {
+      const timestamp = Date.now();
+      const pushError = (message: string, reason: "aborted" | "error" = "error") => {
+        const errorMessage: AssistantMessage = {
+          role: "assistant",
+          content: [],
+          api: model.api,
+          provider: model.provider,
+          model: model.id,
+          usage: emptyUsage(),
+          stopReason: reason,
+          errorMessage: message,
+          timestamp,
+        };
+        stream.push({ type: "error", reason, error: errorMessage });
+        stream.end();
+      };
+
+      try {
+        const chutesModel = model as Model<"openai-completions">;
+        const compat = resolveOpenAiCompletionsCompat(chutesModel);
+        const payload = buildChutesCompletionPayload({
+          model: chutesModel,
+          context,
+          compat,
+          options,
+          toolChoice,
+        });
+        options?.onPayload?.(payload);
+
+        const apiKey = options?.apiKey || getEnvApiKey(model.provider);
+        if (!apiKey) {
+          pushError(`No API key for provider: ${model.provider}`);
+          return;
+        }
+
+        const response = await fetch(resolveChutesChatCompletionsUrl(model.baseUrl), {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${apiKey}`,
+            "content-type": "application/json",
+            ...(model.headers ?? {}),
+            ...(options?.headers ?? {}),
+          },
+          body: JSON.stringify(payload),
+          signal: options?.signal,
+        });
+
+        const rawText = await response.text();
+        if (!response.ok) {
+          const text = rawText.trim();
+          pushError(text ? `HTTP ${response.status}: ${text}` : `${response.status} status code (no body)`);
+          return;
+        }
+
+        const parsed = JSON.parse(rawText) as {
+          choices?: Array<{
+            finish_reason?: string | null;
+            message?: {
+              content?: string | null;
+              tool_calls?: Array<{
+                id?: string;
+                function?: { name?: string; arguments?: string };
+              }> | null;
+            } | null;
+          }>;
+          usage?: {
+            prompt_tokens?: number;
+            completion_tokens?: number;
+            total_tokens?: number;
+            prompt_tokens_details?: { cached_tokens?: number } | null;
+            completion_tokens_details?: { reasoning_tokens?: number } | null;
+          } | null;
+        };
+
+        const hallucinatedToolText = detectHallucinatedToolText({
+          response: parsed,
+          toolNames: (context.tools ?? []).map((tool) => tool.name),
+        });
+        if (hallucinatedToolText) {
+          pushError(
+            "Upstream model returned tool-like text instead of structured tool_calls. " +
+              "Refusing to report tool success without a real tool invocation.",
+          );
+          return;
+        }
+
+        const assistant = buildAssistantMessageFromChutesResponse({
+          model: chutesModel,
+          timestamp,
+          response: parsed,
+        });
+        emitAssistantMessageAsSyntheticStream(stream, assistant);
+      } catch (error) {
+        const aborted = options?.signal?.aborted === true;
+        pushError(error instanceof Error ? error.message : String(error), aborted ? "aborted" : "error");
+      }
+    })();
+
+    return stream;
+  };
+}
+
+function emptyUsage(): Usage {
+  return {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 0,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  };
+}
+
+function resolveChutesChatCompletionsUrl(baseUrl: string): string {
+  return `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
+}
+
+function resolveOpenAiCompletionsCompat(
+  model: Model<"openai-completions">,
+): Required<OpenAICompletionsCompat> {
+  const detected: Required<OpenAICompletionsCompat> = {
+    supportsStore: !model.baseUrl.includes("chutes.ai"),
+    supportsDeveloperRole: !model.baseUrl.includes("chutes.ai"),
+    supportsReasoningEffort: true,
+    supportsUsageInStreaming: true,
+    maxTokensField: model.baseUrl.includes("chutes.ai") ? "max_tokens" : "max_completion_tokens",
+    requiresToolResultName: false,
+    requiresAssistantAfterToolResult: false,
+    requiresThinkingAsText: false,
+    requiresMistralToolIds: false,
+    thinkingFormat: "openai",
+    openRouterRouting: {},
+    vercelGatewayRouting: {},
+    supportsStrictMode: true,
+  };
+  return {
+    ...detected,
+    ...(model.compat ?? {}),
+    openRouterRouting: model.compat?.openRouterRouting ?? detected.openRouterRouting,
+    vercelGatewayRouting: model.compat?.vercelGatewayRouting ?? detected.vercelGatewayRouting,
+  };
+}
+
+function convertToolsForOpenAi(context: Context, compat: Required<OpenAICompletionsCompat>) {
+  return context.tools?.map((tool) => ({
+    type: "function",
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+      ...(compat.supportsStrictMode !== false && { strict: false }),
+    },
+  }));
+}
+
+function buildChutesCompletionPayload(params: {
+  model: Model<"openai-completions">;
+  context: Context;
+  compat: Required<OpenAICompletionsCompat>;
+  options: Parameters<StreamFn>[2];
+  toolChoice: string;
+}): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    model: params.model.id,
+    messages: convertMessages(params.model, params.context, params.compat),
+    stream: false,
+  };
+
+  if (params.options?.maxTokens) {
+    payload[params.compat.maxTokensField] = params.options.maxTokens;
+  }
+  if (params.options?.temperature !== undefined) {
+    payload.temperature = params.options.temperature;
+  }
+
+  const tools = convertToolsForOpenAi(params.context, params.compat);
+  if (tools && tools.length > 0) {
+    payload.tools = tools;
+    if (payload.tool_choice === undefined) {
+      payload.tool_choice = params.toolChoice;
+    }
+  }
+
+  return payload;
+}
+
+function parseToolArguments(raw: string | undefined): Record<string, unknown> {
+  if (!raw?.trim()) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function mapOpenAiFinishReason(reason: string | null | undefined): AssistantMessage["stopReason"] {
+  switch (reason) {
+    case "tool_calls":
+    case "function_call":
+      return "toolUse";
+    case "length":
+      return "length";
+    case "stop":
+    case null:
+    case undefined:
+      return "stop";
+    default:
+      return "stop";
+  }
+}
+
+function buildUsageFromChutesResponse(usage: {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  prompt_tokens_details?: { cached_tokens?: number } | null;
+  completion_tokens_details?: { reasoning_tokens?: number } | null;
+} | null | undefined): Usage {
+  if (!usage) {
+    return emptyUsage();
+  }
+  const cacheRead = usage.prompt_tokens_details?.cached_tokens ?? 0;
+  const input = Math.max(0, (usage.prompt_tokens ?? 0) - cacheRead);
+  const output = (usage.completion_tokens ?? 0) + (usage.completion_tokens_details?.reasoning_tokens ?? 0);
+  return {
+    input,
+    output,
+    cacheRead,
+    cacheWrite: 0,
+    totalTokens: usage.total_tokens ?? input + output + cacheRead,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  };
+}
+
+function buildAssistantMessageFromChutesResponse(params: {
+  model: Model<"openai-completions">;
+  timestamp: number;
+  response: {
+    choices?: Array<{
+      finish_reason?: string | null;
+      message?: {
+        content?: string | null;
+        tool_calls?: Array<{
+          id?: string;
+          function?: { name?: string; arguments?: string };
+        }> | null;
+      } | null;
+    }>;
+    usage?: {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      total_tokens?: number;
+      prompt_tokens_details?: { cached_tokens?: number } | null;
+      completion_tokens_details?: { reasoning_tokens?: number } | null;
+    } | null;
+  };
+}): AssistantMessage {
+  const choice = params.response.choices?.[0];
+  const message = choice?.message;
+  const content: AssistantMessage["content"] = [];
+
+  if (typeof message?.content === "string" && message.content.length > 0) {
+    content.push({ type: "text", text: message.content });
+  }
+
+  for (const toolCall of message?.tool_calls ?? []) {
+    const normalized: ToolCall = {
+      type: "toolCall",
+      id: toolCall.id ?? "",
+      name: toolCall.function?.name ?? "",
+      arguments: parseToolArguments(toolCall.function?.arguments),
+    };
+    content.push(normalized);
+  }
+
+  return {
+    role: "assistant",
+    content,
+    api: params.model.api,
+    provider: params.model.provider,
+    model: params.model.id,
+    usage: buildUsageFromChutesResponse(params.response.usage),
+    stopReason: mapOpenAiFinishReason(choice?.finish_reason),
+    timestamp: params.timestamp,
+  };
+}
+
+function detectHallucinatedToolText(params: {
+  response: {
+    choices?: Array<{
+      message?: {
+        content?: string | null;
+        tool_calls?: Array<unknown> | null;
+      } | null;
+    }>;
+  };
+  toolNames: string[];
+}): boolean {
+  if (!params.toolNames.length) {
+    return false;
+  }
+
+  const choice = params.response.choices?.[0];
+  const toolCalls = choice?.message?.tool_calls;
+  if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+    return false;
+  }
+
+  const text = choice?.message?.content?.trim();
+  if (!text) {
+    return false;
+  }
+
+  const lower = text.toLowerCase();
+  const hasJsonLikeToolBlob =
+    /```json/i.test(text) ||
+    /"action"\s*:/.test(text) ||
+    /"arguments"\s*:/.test(text) ||
+    /"file_path"\s*:/.test(text);
+  const mentionsToolSemantics =
+    /\b(tool|function|call|arguments|parameters)\b/i.test(text) ||
+    params.toolNames.some((name) => lower.includes(name.toLowerCase()));
+
+  return hasJsonLikeToolBlob && mentionsToolSemantics;
+}
+
+function emitAssistantMessageAsSyntheticStream(
+  stream: ReturnType<typeof createAssistantMessageEventStream>,
+  assistant: AssistantMessage,
+): void {
+  const partial: AssistantMessage = {
+    ...assistant,
+    content: [],
+  };
+  stream.push({ type: "start", partial });
+
+  for (const block of assistant.content) {
+    partial.content.push(block);
+    const contentIndex = partial.content.length - 1;
+    if (block.type === "text") {
+      stream.push({ type: "text_start", contentIndex, partial });
+      stream.push({ type: "text_delta", contentIndex, delta: block.text, partial });
+      stream.push({ type: "text_end", contentIndex, content: block.text, partial });
+      continue;
+    }
+    if (block.type === "thinking") {
+      stream.push({ type: "thinking_start", contentIndex, partial });
+      stream.push({ type: "thinking_delta", contentIndex, delta: block.thinking, partial });
+      stream.push({ type: "thinking_end", contentIndex, content: block.thinking, partial });
+      continue;
+    }
+    const rawArgs = JSON.stringify(block.arguments);
+    stream.push({ type: "toolcall_start", contentIndex, partial });
+    stream.push({ type: "toolcall_delta", contentIndex, delta: rawArgs, partial });
+    stream.push({ type: "toolcall_end", contentIndex, toolCall: block, partial });
+  }
+
+  if (assistant.stopReason === "error" || assistant.stopReason === "aborted") {
+    stream.push({ type: "error", reason: assistant.stopReason, error: assistant });
+    stream.end();
+    return;
+  }
+
+  stream.push({ type: "done", reason: assistant.stopReason, message: assistant });
+  stream.end();
+}
+
+/**
  * Apply extra params (like temperature) to an agent's streamFn.
  * Also adds OpenRouter app attribution headers when using the OpenRouter provider.
  *
@@ -701,6 +1100,14 @@ export function applyExtraParamsToAgent(
       log.debug(`enabling Z.AI tool_stream for ${provider}/${modelId}`);
       agent.streamFn = createZaiToolStreamWrapper(agent.streamFn, true);
     }
+  }
+
+  // Chutes returns reliable tool calls in non-stream mode, but can drop
+  // tool_calls entirely from streaming SSE responses. Route all Chutes model
+  // calls through a non-streaming request path and synthesize Pi events.
+  if (provider === "chutes") {
+    const toolChoiceOverride = merged?.toolChoice as string | undefined;
+    agent.streamFn = createChutesNonStreamingWrapper(agent.streamFn, toolChoiceOverride ?? "auto");
   }
 
   // Guard Google payloads against invalid negative thinking budgets emitted by
