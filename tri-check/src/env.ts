@@ -51,3 +51,31 @@ export function formatChutesKeyForLog(key: string): string {
   if (k.length <= 14) return `***redacted*** (len ${k.length})`;
   return `${k.slice(0, 8)}…${k.slice(-6)} (len ${k.length})`;
 }
+
+/**
+ * Strip secret values (API keys, gateway tokens) from arbitrary strings.
+ * Call on any data that may be logged, printed, or persisted.
+ */
+export function redactSecrets(text: string, urls: ResolvedServiceUrls): string {
+  let result = text;
+  for (const secret of [urls.chutesApiKey, urls.openclawToken]) {
+    if (secret && secret.length > 0 && result.includes(secret)) {
+      result = result.replaceAll(secret, "[REDACTED]");
+    }
+  }
+  return result;
+}
+
+/** Deep-walk an object replacing secret values in all string leaves. */
+export function redactSecretsFromObject<T>(data: T, urls: ResolvedServiceUrls): T {
+  if (typeof data === "string") return redactSecrets(data, urls) as T;
+  if (Array.isArray(data)) return data.map((item) => redactSecretsFromObject(item, urls)) as T;
+  if (data && typeof data === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(data)) {
+      out[k] = redactSecretsFromObject(v, urls);
+    }
+    return out as T;
+  }
+  return data;
+}
