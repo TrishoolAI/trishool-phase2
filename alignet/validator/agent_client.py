@@ -65,6 +65,7 @@ class AgentClient:
             (os.getenv("OPENCLAW_GATEWAY_PASSWORD") or os.getenv("OPENCLAW_GATEWAY_TOKEN") or "").strip()
         )
         self.chutes_api_key = (os.getenv("CHUTES_API_KEY") or "").strip()
+        self._secret_values = [v for v in [self.openclaw_token, self.chutes_api_key] if v]
 
         logger.info(
             f"AgentClient initialized: tri-claw={self.tri_claw_url}, judge={self.judge_url}"
@@ -78,6 +79,22 @@ class AgentClient:
         if self.chutes_api_key:
             headers["X-Chutes-Api-Key"] = self.chutes_api_key
         return headers
+
+    def _redact_secrets(self, data: Any) -> Any:
+        """Strip secret values (API keys, tokens) from any data structure before storage/logging."""
+        if not self._secret_values:
+            return data
+        if isinstance(data, str):
+            result = data
+            for secret in self._secret_values:
+                if secret and secret in result:
+                    result = result.replace(secret, "[REDACTED]")
+            return result
+        if isinstance(data, dict):
+            return {k: self._redact_secrets(v) for k, v in data.items()}
+        if isinstance(data, list):
+            return [self._redact_secrets(item) for item in data]
+        return data
 
     async def _health_check(self, url: str, agent_type: AgentType) -> bool:
         """Check health of an agent container."""
@@ -164,9 +181,9 @@ class AgentClient:
                                 f"Tri-claw success for submission {submission_id} "
                                 f"(attempt {attempt + 1})"
                             )
-                            return result
+                            return self._redact_secrets(result)
                         error_text = await response.text()
-                        last_error = f"HTTP {response.status}: {error_text}"
+                        last_error = f"HTTP {response.status}: {self._redact_secrets(error_text)}"
                         logger.warning(
                             f"Tri-claw failed (attempt {attempt + 1}/{self.max_retries}): {last_error}"
                         )
@@ -174,8 +191,8 @@ class AgentClient:
                 last_error = f"Request timeout after {self.timeout.total}s"
                 logger.warning(f"Tri-claw timeout (attempt {attempt + 1}/{self.max_retries})")
             except Exception as e:
-                last_error = str(e)
-                logger.warning(f"Tri-claw error (attempt {attempt + 1}/{self.max_retries}): {e}")
+                last_error = self._redact_secrets(str(e))
+                logger.warning(f"Tri-claw error (attempt {attempt + 1}/{self.max_retries}): {last_error}")
 
             if attempt < self.max_retries - 1:
                 await asyncio.sleep(self.retry_delay * (attempt + 1))
@@ -247,9 +264,9 @@ class AgentClient:
                             logger.info(
                                 f"Judge success for question {question_id} (attempt {attempt + 1})"
                             )
-                            return result
+                            return self._redact_secrets(result)
                         error_text = await response.text()
-                        last_error = f"HTTP {response.status}: {error_text}"
+                        last_error = f"HTTP {response.status}: {self._redact_secrets(error_text)}"
                         logger.warning(
                             f"Judge failed (attempt {attempt + 1}/{self.max_retries}): {last_error}"
                         )
@@ -257,8 +274,8 @@ class AgentClient:
                 last_error = f"Request timeout after {self.timeout.total}s"
                 logger.warning(f"Judge timeout (attempt {attempt + 1}/{self.max_retries})")
             except Exception as e:
-                last_error = str(e)
-                logger.warning(f"Judge error (attempt {attempt + 1}/{self.max_retries}): {e}")
+                last_error = self._redact_secrets(str(e))
+                logger.warning(f"Judge error (attempt {attempt + 1}/{self.max_retries}): {last_error}")
 
             if attempt < self.max_retries - 1:
                 await asyncio.sleep(self.retry_delay * (attempt + 1))
