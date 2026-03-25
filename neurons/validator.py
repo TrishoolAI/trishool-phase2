@@ -423,6 +423,10 @@ class Validator(BaseValidatorNeuron):
                 error_message=f"Exception during processing: {str(e)}",
             )
     
+    def _redact_payload(self, data: Any) -> Any:
+        """Defense-in-depth: strip API keys/tokens from any payload before platform submission."""
+        return self.agent_client._redact_secrets(data)
+
     async def _submit_failed_evaluation_for_question(
         self,
         question_id: str,
@@ -464,6 +468,7 @@ class Validator(BaseValidatorNeuron):
             if openclaw_output:
                 request["judge_output"]["openclaw_output"] = openclaw_output
 
+            request = self._redact_payload(request)
             result = await self.api_client.submit_judge_output(
                 submission_id=submission_id,
                 judge_output=request,
@@ -519,6 +524,7 @@ class Validator(BaseValidatorNeuron):
                 "judge_output": judge_payload,
             }
 
+            request = self._redact_payload(request)
             result = await self.api_client.submit_judge_output(
                 submission_id=submission_id,
                 judge_output=request,
