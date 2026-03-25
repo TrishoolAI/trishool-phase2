@@ -3,6 +3,13 @@ import { buildJudgeInstructions } from "./judge-prompt.js";
 import { validateJudgeResponse } from "./judge-result.js";
 import type { AppConfig, EvaluateQuestionRequest, JudgeResponse } from "./types.js";
 
+const SENSITIVE_RE = /(?:x-chutes-api-key|authorization)[:\s]*\S+/gi;
+function sanitize(text: string, apiKey?: string): string {
+  let s = text.replace(SENSITIVE_RE, "[REDACTED]");
+  if (apiKey && apiKey.length > 0) s = s.replaceAll(apiKey, "[REDACTED]");
+  return s;
+}
+
 type OpenAiLikeMessage = {
   role?: string;
   content?: string | Array<Record<string, unknown>>;
@@ -88,7 +95,7 @@ function extractAssistantText(payload: OpenAiLikeResponse): string {
     return reasoning.trim();
   }
 
-  const debugShape = JSON.stringify(message).slice(0, 800);
+  const debugShape = sanitize(JSON.stringify(message).slice(0, 800));
   console.error(
     `[judge-client] upstream assistant message had no extractable text (content/reasoning_content). shape=${debugShape}`,
   );
@@ -218,7 +225,7 @@ export class JudgeClient {
             } catch {
               errorBody = "(could not read response body)";
             }
-            console.error(`[judge-client] model=${model} attempt ${attempt} upstream error body: ${errorBody}`);
+            console.error(`[judge-client] model=${model} attempt ${attempt} upstream error body: ${sanitize(errorBody, apiKey)}`);
             throw new JudgeUpstreamError(
               `Judge upstream request failed with HTTP ${response.status}.`,
               response.status,
@@ -231,12 +238,12 @@ export class JudgeClient {
             rawText = await response.text();
             upstreamPayload = JSON.parse(rawText) as OpenAiLikeResponse;
           } catch {
-            console.error(`[judge-client] model=${model} attempt ${attempt} upstream returned invalid JSON: ${rawText?.slice(0, 500)}`);
+            console.error(`[judge-client] model=${model} attempt ${attempt} upstream returned invalid JSON: ${sanitize(rawText?.slice(0, 500) ?? "", apiKey)}`);
             throw new JudgeOutputError("Judge upstream returned invalid JSON.");
           }
 
           const assistantText = extractAssistantText(upstreamPayload as OpenAiLikeResponse);
-          console.log(`[judge-client] model=${model} attempt ${attempt} assistant response (first 300 chars): ${assistantText.slice(0, 300)}`);
+          console.log(`[judge-client] model=${model} attempt ${attempt} assistant response (first 300 chars): ${sanitize(assistantText.slice(0, 300), apiKey)}`);
 
           let parsed: unknown;
           try {
@@ -246,7 +253,7 @@ export class JudgeClient {
               parsed = extractJsonObject(assistantText);
             } catch {
               console.error(
-                `[judge-client] model=${model} attempt ${attempt} judge output not valid JSON: ${assistantText.slice(0, 500)}`,
+                `[judge-client] model=${model} attempt ${attempt} judge output not valid JSON: ${sanitize(assistantText.slice(0, 500), apiKey)}`,
               );
               throw new JudgeOutputError("Judge model output was not valid JSON.");
             }

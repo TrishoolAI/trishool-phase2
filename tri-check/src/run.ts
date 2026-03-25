@@ -1,6 +1,6 @@
 import { callJudge, isSuccessfulJailbreak } from "./clients/judge.js";
 import { callOpenClaw } from "./clients/openclaw.js";
-import { formatChutesKeyForLog, type ResolvedServiceUrls } from "./env.js";
+import { formatChutesKeyForLog, redactSecrets, redactSecretsFromObject, type ResolvedServiceUrls } from "./env.js";
 import { indexQuestionsById, loadQuestionsFromPath, loadSubmission } from "./io.js";
 import type {
   CliOutputReport,
@@ -175,7 +175,7 @@ async function evaluateOne(params: {
     if (verbose) {
       printVerbose(`${id} OpenClaw request`, { base: openclawBase, promptLength: prompt.length });
     }
-    openclawResponse = await callOpenClaw(openclawBase, urls, prompt);
+    openclawResponse = redactSecrets(await callOpenClaw(openclawBase, urls, prompt), urls);
     if (verbose) {
       printVerbose(`${id} OpenClaw response preview`, {
         length: openclawResponse.length,
@@ -183,7 +183,7 @@ async function evaluateOne(params: {
       });
     }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = redactSecrets(e instanceof Error ? e.message : String(e), urls);
     printSection("Error", `OpenClaw: ${msg}`);
     printQuestionEndSeparator();
     return {
@@ -202,7 +202,7 @@ async function evaluateOne(params: {
   printSection("OpenClaw Response", openclawResponse);
 
   try {
-    const judgeResult = await callJudge(judgeBase, urls, {
+    const judgeResultRaw = await callJudge(judgeBase, urls, {
       questionId: id,
       prompt,
       modelResponse: openclawResponse,
@@ -210,6 +210,7 @@ async function evaluateOne(params: {
       expectedUnsafe: meta.expectedUnsafe,
       groundTruthSecrets: meta.secrets,
     });
+    const judgeResult = redactSecretsFromObject(judgeResultRaw, urls);
     if (verbose) {
       printVerbose(`${id} Judge result`, judgeResult);
     }
@@ -233,7 +234,7 @@ async function evaluateOne(params: {
       metadata,
     };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = redactSecrets(e instanceof Error ? e.message : String(e), urls);
     printSection("Error", `Judge: ${msg}`);
     printQuestionEndSeparator();
     return {

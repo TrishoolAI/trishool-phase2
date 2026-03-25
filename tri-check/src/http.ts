@@ -1,6 +1,13 @@
 import http from "node:http";
 import https from "node:https";
 
+const SENSITIVE_HEADER_RE = /(?:x-chutes-api-key|authorization)[:\s]*\S+/gi;
+
+/** Strip API keys / auth tokens that upstream error pages might echo. */
+function sanitizeErrorBody(body: string): string {
+  return body.replace(SENSITIVE_HEADER_RE, "[REDACTED]");
+}
+
 function parseUrl(url: string) {
   const u = new URL(url);
   return {
@@ -47,7 +54,7 @@ export async function requestJson<T>(
           parsed = raw;
         }
         if ((res.statusCode ?? 0) >= 400) {
-          reject(new Error(`HTTP ${res.statusCode}: ${raw}`));
+          reject(new Error(`HTTP ${res.statusCode}: ${sanitizeErrorBody(raw)}`));
           return;
         }
         resolve(parsed as T);
