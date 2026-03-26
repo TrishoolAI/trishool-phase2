@@ -4,6 +4,13 @@ const TIMEOUT_HINT_RE =
   /timeout|timed out|deadline exceeded|context deadline exceeded|stop reason:\s*abort|reason:\s*abort|unhandled stop reason:\s*abort/i;
 const ABORT_TIMEOUT_RE = /request was aborted|request aborted/i;
 
+/** Matches "HTTP 502", "http 503", etc. anywhere in the message (not only at start). */
+const HTTP_TOKEN_STATUS_RE = /\bhttps?\s+(\d{3})\b/gi;
+
+const TRANSIENT_HTTP_STATUSES = new Set([
+  500, 502, 503, 504, 521, 522, 523, 524, 529,
+]);
+
 export class FailoverError extends Error {
   readonly reason: FailoverReason;
   readonly provider?: string;
@@ -72,6 +79,89 @@ function getStatusCode(err: unknown): number | undefined {
     return Number(candidate);
   }
   return undefined;
+}
+
+function getStatusCodeDeep(err: unknown, depth = 0): number | undefined {
+  if (!err || typeof err !== "object" || depth > 8) {
+    return undefined;
+  }
+  const direct = getStatusCode(err);
+  if (direct !== undefined) {
+    return direct;
+  }
+  const cause = "cause" in err ? (err as { cause?: unknown }).cause : undefined;
+  return getStatusCodeDeep(cause, depth + 1);
+}
+
+function accumulateErrorText(err: unknown, depth = 0): string {
+  if (!err || depth > 8) {
+    return "";
+  }
+  const parts: string[] = [];
+  const msg = getErrorMessage(err);
+  if (msg) {
+    parts.push(msg);
+  }
+  if (err && typeof err === "object" && "cause" in err) {
+    const nested = accumulateErrorText((err as { cause?: unknown }).cause, depth + 1);
+    if (nested) {
+      parts.push(nested);
+    }
+  }
+  return parts.join("\n");
+}
+
+function mapHttpStatusToFailoverReason(
+  status: number,
+  opts?: { modelNotFoundFrom404?: boolean },
+): FailoverReason | null {
+  if (status === 402) {
+    return "billing";
+  }
+  if (status === 429) {
+    return "rate_limit";
+  }
+  if (status === 401 || status === 403) {
+    return "auth";
+  }
+  if (status === 408) {
+    return "timeout";
+  }
+  if (TRANSIENT_HTTP_STATUSES.has(status)) {
+    return "timeout";
+  }
+  if (status === 400) {
+    return "format";
+  }
+  if (opts?.modelNotFoundFrom404 && status === 404) {
+    return "model_not_found";
+  }
+  return null;
+}
+
+/**
+ * First "http(s) NNN" token in the text that maps to a failover reason (left-to-right).
+ */
+function extractFailoverHttpStatusFromText(text: string): {
+  status: number;
+  reason: FailoverReason;
+} | null {
+  if (!text) {
+    return null;
+  }
+  HTTP_TOKEN_STATUS_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = HTTP_TOKEN_STATUS_RE.exec(text)) !== null) {
+    const code = Number(match[1]);
+    if (!Number.isFinite(code)) {
+      continue;
+    }
+    const reason = mapHttpStatusToFailoverReason(code, { modelNotFoundFrom404: true });
+    if (reason) {
+      return { status: code, reason };
+    }
+  }
+  return null;
 }
 
 function getErrorName(err: unknown): string {
@@ -150,24 +240,12 @@ export function resolveFailoverReasonFromError(err: unknown): FailoverReason | n
     return err.reason;
   }
 
-  const status = getStatusCode(err);
-  if (status === 402) {
-    return "billing";
-  }
-  if (status === 429) {
-    return "rate_limit";
-  }
-  if (status === 401 || status === 403) {
-    return "auth";
-  }
-  if (status === 408) {
-    return "timeout";
-  }
-  if (status === 502 || status === 503 || status === 504) {
-    return "timeout";
-  }
-  if (status === 400) {
-    return "format";
+  const status = getStatusCodeDeep(err);
+  if (status !== undefined) {
+    const fromStatus = mapHttpStatusToFailoverReason(status);
+    if (fromStatus) {
+      return fromStatus;
+    }
   }
 
   const code = (getErrorCode(err) ?? "").toUpperCase();
@@ -178,11 +256,16 @@ export function resolveFailoverReasonFromError(err: unknown): FailoverReason | n
     return "timeout";
   }
 
-  const message = getErrorMessage(err);
-  if (!message) {
+  const combined = accumulateErrorText(err);
+  const fromHttpToken = extractFailoverHttpStatusFromText(combined);
+  if (fromHttpToken) {
+    return fromHttpToken.reason;
+  }
+
+  if (!combined) {
     return null;
   }
-  return classifyFailoverReason(message);
+  return classifyFailoverReason(combined);
 }
 
 export function describeFailoverError(err: unknown): {
@@ -200,10 +283,11 @@ export function describeFailoverError(err: unknown): {
     };
   }
   const message = getErrorMessage(err) || String(err);
+  const inferred = extractFailoverHttpStatusFromText(accumulateErrorText(err));
   return {
     message,
     reason: resolveFailoverReasonFromError(err) ?? undefined,
-    status: getStatusCode(err),
+    status: getStatusCodeDeep(err) ?? inferred?.status,
     code: getErrorCode(err),
   };
 }
@@ -225,7 +309,8 @@ export function coerceToFailoverError(
   }
 
   const message = getErrorMessage(err) || String(err);
-  const status = getStatusCode(err) ?? resolveFailoverStatus(reason);
+  const inferred = extractFailoverHttpStatusFromText(accumulateErrorText(err));
+  const status = getStatusCodeDeep(err) ?? inferred?.status ?? resolveFailoverStatus(reason);
   const code = getErrorCode(err);
 
   return new FailoverError(message, {
