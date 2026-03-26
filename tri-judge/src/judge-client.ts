@@ -259,7 +259,10 @@ export class JudgeClient {
             }
           }
 
-          return validateJudgeResponse(parsed);
+          return validateJudgeResponse(parsed, {
+            prompt: input.prompt,
+            modelResponse: input.modelResponse,
+          });
         } catch (error) {
           clearTimeout(timeout);
           const rawError = error as Error;
