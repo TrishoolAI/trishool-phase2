@@ -17,6 +17,39 @@ describe("failover-error", () => {
     expect(resolveFailoverReasonFromError({ status: 502 })).toBe("timeout");
     expect(resolveFailoverReasonFromError({ status: 503 })).toBe("timeout");
     expect(resolveFailoverReasonFromError({ status: 504 })).toBe("timeout");
+    expect(resolveFailoverReasonFromError({ status: 500 })).toBe("timeout");
+  });
+
+  it("infers failover from HTTP NNN anywhere in the message (not only at start)", () => {
+    expect(
+      resolveFailoverReasonFromError({
+        message: "request failed: HTTP 502: bad gateway",
+      }),
+    ).toBe("timeout");
+    expect(
+      resolveFailoverReasonFromError({
+        message: "wrapped: http 503 service unavailable",
+      }),
+    ).toBe("timeout");
+  });
+
+  it("maps scanned HTTP 404 to model_not_found for bad model / unknown id strings", () => {
+    expect(
+      resolveFailoverReasonFromError({
+        message: "call failed: HTTP 404: {}",
+      }),
+    ).toBe("model_not_found");
+  });
+
+  it("reads status from nested Error.cause chain", () => {
+    const inner = { message: "HTTP 502: upstream" };
+    const outer = new Error("outer");
+    (outer as Error & { cause?: unknown }).cause = inner;
+    expect(resolveFailoverReasonFromError(outer)).toBe("timeout");
+  });
+
+  it("does not treat bare status:404 objects as model_not_found (legacy behavior)", () => {
+    expect(resolveFailoverReasonFromError({ status: 404 })).toBeNull();
   });
 
   it("infers format errors from error messages", () => {
