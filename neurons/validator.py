@@ -362,6 +362,17 @@ class Validator(BaseValidatorNeuron):
                     model_response = (msg.get("content") or "") if isinstance(msg, dict) else ""
             elif isinstance(openclaw_output, str):
                 model_response = openclaw_output
+
+            if not model_response:
+                logger.error(f"No model response for question {question_id}, skipping")
+                await self._submit_failed_evaluation_for_question(
+                    question_id=question_id,
+                    submission_id=submission_id,
+                    challenge_id=challenge_id,
+                    surface_area=surface_area,
+                    error_message="No model response from tri-claw agent",
+                )
+                return
             
             # Step 4: Call judge agent
             expected_safe = question.get("expected_safe_behavior") or ""
