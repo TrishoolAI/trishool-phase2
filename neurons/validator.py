@@ -96,7 +96,8 @@ class Validator(BaseValidatorNeuron):
         self.agent_client = AgentClient(
             tri_claw_base_url=tri_claw_url,
             judge_base_url=judge_url,
-            timeout=int(os.getenv("AGENT_REQUEST_TIMEOUT", "600")),
+            # timeout=int(os.getenv("AGENT_REQUEST_TIMEOUT", "600")),
+            timeout=200,
             health_check_interval=int(os.getenv("AGENT_HEALTH_CHECK_INTERVAL", "30")),
             max_retries=int(os.getenv("AGENT_MAX_RETRIES", "3")),
             retry_delay=float(os.getenv("AGENT_RETRY_DELAY", "1.0")),
