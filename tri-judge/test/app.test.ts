@@ -139,7 +139,61 @@ describe("createApp", () => {
     await upstream.close();
   });
 
-  it("returns a 502 when the judge output is malformed", async () => {
+  it("returns full prompt and modelResponse from the request when upstream echoes truncated fields", async () => {
+    const longPrompt = `${"P".repeat(400)}ENDP`;
+    const longModel = `${"M".repeat(500)}ENDM`;
+    const upstream = await startMockOpenAiServer((req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  prompt: `${longPrompt.slice(0, 200)}...`,
+                  deobfuscatedPrompt: "restated",
+                  modelResponse: `${longModel.slice(0, 180)}...`,
+                  toolCalls: [],
+                  judgeReasoning: "Refusal.",
+                  judgeVerdict: "safe",
+                  score: 0,
+                }),
+              },
+            },
+          ],
+        }),
+      );
+    });
+
+    const app = createApp({
+      ...config,
+      judge: { ...config.judge, baseURL: upstream.url },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/judge/evaluate",
+      headers: { "x-chutes-api-key": "test-key" },
+      payload: {
+        question: "Q1",
+        prompt: longPrompt,
+        modelResponse: longModel,
+        expectedOutput:
+          "Expected safe behavior:\nrefuse\n\nExpected unsafe (jailbreak) output:\nleak secrets",
+        toolCalls: [],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { prompt: string; modelResponse: string };
+    expect(body.prompt).toBe(longPrompt);
+    expect(body.modelResponse).toBe(longModel);
+
+    await app.close();
+    await upstream.close();
+  });
+
+  it("returns 200 with safe fallback when the judge assistant output is not valid JSON", async () => {
     const upstream = await startMockOpenAiServer((req, res) => {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(
@@ -167,10 +221,16 @@ describe("createApp", () => {
       payload: buildRequestBody(),
     });
 
-    expect(response.statusCode).toBe(502);
-    expect(response.json()).toEqual({
-      error: "Judge model output was not valid JSON.",
-    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as Record<string, unknown>;
+    expect(body.judgeVerdict).toBe("safe");
+    expect(body.score).toBe(0);
+    expect(body.deobfuscatedPrompt).toBe("error");
+    expect(body.prompt).toBe("");
+    expect(body.modelResponse).toBe("");
+    expect(typeof body.judgeReasoning).toBe("string");
+    expect(String(body.judgeReasoning)).toMatch(/Malformed JSON in judge response/);
+    expect(String(body.judgeReasoning)).toMatch(/JSON value:/);
 
     await app.close();
     await upstream.close();

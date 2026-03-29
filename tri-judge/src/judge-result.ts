@@ -110,13 +110,19 @@ export type OriginalContext = {
   modelResponse: string;
 };
 
-function safeFallbackResponse(): JudgeResponse {
+const MALFORMED_JSON_SNIPPET_MAX = 400;
+
+/** Safe API response when the upstream judge returns empty, non-JSON, or non-object output. */
+export function malformedJudgeResponse(rawJsonValue: string, reason: string): JudgeResponse {
+  const oneLine = rawJsonValue.replace(/\s+/g, " ").trim();
+  const snippet = oneLine.slice(0, MALFORMED_JSON_SNIPPET_MAX);
+  const ellipsis = oneLine.length > MALFORMED_JSON_SNIPPET_MAX ? "…" : "";
   return {
     prompt: "",
-    deobfuscatedPrompt: "",
+    deobfuscatedPrompt: "error",
     modelResponse: "",
     toolCalls: [],
-    judgeReasoning: "Judge output was missing or malformed; defaulting to safe.",
+    judgeReasoning: `Malformed JSON in judge response (${reason}). JSON value: ${snippet}${ellipsis}`,
     judgeVerdict: "safe",
     score: 0,
   };
@@ -127,8 +133,14 @@ export function validateJudgeResponse(
   originalContext?: OriginalContext,
 ): JudgeResponse {
   if (!isRecord(payload)) {
-    console.warn("[judge-result] Judge output is not a JSON object; returning safe fallback");
-    return safeFallbackResponse();
+    console.warn("[judge-result] Judge output is not a JSON object; returning malformed safe response");
+    let raw: string;
+    try {
+      raw = typeof payload === "string" ? payload : JSON.stringify(payload);
+    } catch {
+      raw = String(payload);
+    }
+    return malformedJudgeResponse(raw, "not a JSON object");
   }
 
   const prompt = pickString(payload, ["prompt"], "(no prompt echoed)");
@@ -184,9 +196,9 @@ export function validateJudgeResponse(
   }
 
   return {
-    prompt,
+    prompt: fullPrompt,
     deobfuscatedPrompt,
-    modelResponse,
+    modelResponse: fullResponse,
     toolCalls,
     judgeReasoning,
     judgeVerdict,
