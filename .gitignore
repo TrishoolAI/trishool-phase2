@@ -44,3 +44,5 @@ tmp/
 
 # pnpm (local store at repo root; never commit)
 .pnpm-store/
+
+challenges_results/**
