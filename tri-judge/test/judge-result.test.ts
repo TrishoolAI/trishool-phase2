@@ -1,7 +1,46 @@
 import { describe, expect, it } from "vitest";
-import { malformedJudgeResponse, validateJudgeResponse } from "../src/judge-result.js";
+import { JudgeUpstreamError } from "../src/errors.js";
+import {
+  isTrivialJudgeText,
+  malformedJudgeResponse,
+  upstreamFailureJudgeResponse,
+  validateJudgeResponse,
+} from "../src/judge-result.js";
+
+describe("isTrivialJudgeText", () => {
+  it("detects ellipsis-only placeholders", () => {
+    expect(isTrivialJudgeText("...")).toBe(true);
+    expect(isTrivialJudgeText("…")).toBe(true);
+    expect(isTrivialJudgeText(" . … ")).toBe(true);
+    expect(isTrivialJudgeText("n/a")).toBe(true);
+  });
+
+  it("allows real analysis", () => {
+    expect(isTrivialJudgeText("The model refused and cited policy.")).toBe(false);
+  });
+});
 
 describe("validateJudgeResponse", () => {
+  it("replaces placeholder-only deobfuscatedPrompt and judgeReasoning", () => {
+    const out = validateJudgeResponse(
+      {
+        prompt: "",
+        deobfuscatedPrompt: "...",
+        modelResponse: "",
+        judgeReasoning: "...",
+        judgeVerdict: "safe",
+        score: 0,
+        toolCalls: [],
+      },
+      { prompt: "user asks for harm", modelResponse: "harmful reply" },
+    );
+    expect(out.deobfuscatedPrompt).not.toBe("...");
+    expect(out.deobfuscatedPrompt).toContain("placeholder");
+    expect(out.judgeReasoning).not.toBe("...");
+    expect(out.judgeReasoning).toContain("placeholder");
+    expect(out.judgeReasoning).toContain("safe");
+  });
+
   it("returns full prompt and modelResponse from originalContext when judge echoes truncated text", () => {
     const longPrompt = `${"p".repeat(400)}END_PROMPT`;
     const longResponse = `${"m".repeat(400)}END_RESPONSE`;
@@ -56,6 +95,26 @@ describe("validateJudgeResponse", () => {
     expect(out.prompt).toBe("");
     expect(out.modelResponse).toBe("");
     expect(out.judgeReasoning).toMatch(/Malformed JSON in judge response/);
+  });
+
+  it("upstreamFailureJudgeResponse embeds HTTP status and body detail in judgeReasoning", () => {
+    const input = {
+      question: "Q1",
+      prompt: "p",
+      modelResponse: "m",
+      toolCalls: [] as unknown[],
+      expectedOutput: "x",
+    };
+    const err = new JudgeUpstreamError("Judge upstream request failed with HTTP 502.", 502, '{"error":"bad gateway"}');
+    const out = upstreamFailureJudgeResponse(input, err);
+    expect(out.prompt).toBe("p");
+    expect(out.modelResponse).toBe("m");
+    expect(out.deobfuscatedPrompt).toBe("error");
+    expect(out.judgeVerdict).toBe("safe");
+    expect(out.score).toBe(0);
+    expect(out.judgeReasoning).toContain("HTTP 502");
+    expect(out.judgeReasoning).toContain("Upstream body (truncated):");
+    expect(out.judgeReasoning).toContain("bad gateway");
   });
 
   it("malformedJudgeResponse matches API contract for errors", () => {
