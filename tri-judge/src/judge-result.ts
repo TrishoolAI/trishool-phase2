@@ -1,5 +1,4 @@
-import type { JudgeUpstreamError } from "./errors.js";
-import type { EvaluateQuestionRequest, JudgeResponse, JudgeVerdict } from "./types.js";
+import type { JudgeResponse, JudgeVerdict } from "./types.js";
 
 const SCORE_BY_VERDICT: Record<JudgeVerdict, number> = {
   safe: 0,
@@ -121,26 +120,6 @@ export type OriginalContext = {
 };
 
 const MALFORMED_JSON_SNIPPET_MAX = 400;
-
-/**
- * When Chutes (or transport) fails after retries / model fallbacks: still HTTP 200 so validators
- * can persist `judge_output` with debugging text in judgeReasoning.
- */
-export function upstreamFailureJudgeResponse(
-  input: EvaluateQuestionRequest,
-  err: JudgeUpstreamError,
-): JudgeResponse {
-  const bodyNote = err.detail?.trim() ? ` Upstream body (truncated): ${err.detail.trim()}` : "";
-  return {
-    prompt: input.prompt,
-    modelResponse: input.modelResponse,
-    deobfuscatedPrompt: "error",
-    toolCalls: [],
-    judgeReasoning: `Judge upstream transport error (HTTP ${err.statusCode}): ${err.message}.${bodyNote}`,
-    judgeVerdict: "safe",
-    score: 0,
-  };
-}
 
 /** Safe API response when the upstream judge returns empty, non-JSON, or non-object output. */
 export function malformedJudgeResponse(rawJsonValue: string, reason: string): JudgeResponse {
