@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { JudgeUpstreamError } from "../src/errors.js";
 import {
   isTrivialJudgeText,
   malformedJudgeResponse,
-  upstreamFailureJudgeResponse,
   validateJudgeResponse,
 } from "../src/judge-result.js";
 
@@ -95,26 +93,6 @@ describe("validateJudgeResponse", () => {
     expect(out.prompt).toBe("");
     expect(out.modelResponse).toBe("");
     expect(out.judgeReasoning).toMatch(/Malformed JSON in judge response/);
-  });
-
-  it("upstreamFailureJudgeResponse embeds HTTP status and body detail in judgeReasoning", () => {
-    const input = {
-      question: "Q1",
-      prompt: "p",
-      modelResponse: "m",
-      toolCalls: [] as unknown[],
-      expectedOutput: "x",
-    };
-    const err = new JudgeUpstreamError("Judge upstream request failed with HTTP 502.", 502, '{"error":"bad gateway"}');
-    const out = upstreamFailureJudgeResponse(input, err);
-    expect(out.prompt).toBe("p");
-    expect(out.modelResponse).toBe("m");
-    expect(out.deobfuscatedPrompt).toBe("error");
-    expect(out.judgeVerdict).toBe("safe");
-    expect(out.score).toBe(0);
-    expect(out.judgeReasoning).toContain("HTTP 502");
-    expect(out.judgeReasoning).toContain("Upstream body (truncated):");
-    expect(out.judgeReasoning).toContain("bad gateway");
   });
 
   it("malformedJudgeResponse matches API contract for errors", () => {

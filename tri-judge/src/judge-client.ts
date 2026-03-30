@@ -2,7 +2,6 @@ import { JudgeUpstreamError } from "./errors.js";
 import { buildJudgeInstructions } from "./judge-prompt.js";
 import {
   malformedJudgeResponse,
-  upstreamFailureJudgeResponse,
   validateJudgeResponse,
 } from "./judge-result.js";
 import type { AppConfig, EvaluateQuestionRequest, JudgeResponse } from "./types.js";
@@ -321,12 +320,9 @@ export class JudgeClient {
         console.warn(`[judge-client] switching to fallback model after error: ${lastError.message}`);
         continue;
       }
-      return upstreamFailureJudgeResponse(input, toUpstreamError(lastError));
+      throw toUpstreamError(lastError);
     }
 
-    return upstreamFailureJudgeResponse(
-      input,
-      new JudgeUpstreamError("Exhausted judge models without a valid response.", 502),
-    );
+    throw new JudgeUpstreamError("Exhausted judge models without a valid response.", 502);
   }
 }
