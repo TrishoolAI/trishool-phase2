@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Bring up tri-shared network, tri-claw (lean), then tri-judge.
+# Always rebuild images: tri-claw via docker-setup.sh --build; tri-judge via compose up --build.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,8 +17,8 @@ fi
 # Create shared network if it doesn't exist
 docker network inspect tri-shared &>/dev/null || docker network create tri-shared
 
-# tri-claw lean (runs docker-setup.sh --lean)
-"$ROOT/tri-claw/docker-setup-lean.sh" "$@"
+# tri-claw lean (runs docker-setup.sh --lean --build)
+"$ROOT/tri-claw/docker-setup-lean.sh" --build "$@"
 
 # tri-judge (explicit project name so we never inherit COMPOSE_PROJECT_NAME=tri-claw from .env.tri-claw)
 cd "$ROOT/tri-judge"
