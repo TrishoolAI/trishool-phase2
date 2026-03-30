@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
-import { RequestValidationError } from "./errors.js";
+import { JudgeUpstreamError, RequestValidationError } from "./errors.js";
 import { parseEvaluateQuestionRequest } from "./request.js";
 import type { AppConfig } from "./types.js";
 import { JudgeClient } from "./judge-client.js";
@@ -33,6 +33,13 @@ export function createApp(config: AppConfig): FastifyInstance {
       if (error instanceof RequestValidationError) {
         return reply.code(400).send({
           error: error.message,
+        });
+      }
+      if (error instanceof JudgeUpstreamError) {
+        request.log.error({ err: error }, "Judge upstream request failed");
+        return reply.code(error.statusCode).send({
+          error: error.message,
+          ...(error.detail ? { detail: error.detail } : {}),
         });
       }
 
