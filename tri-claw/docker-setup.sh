@@ -186,6 +186,20 @@ fi
 export OPENCLAW_GATEWAY_TOKEN
 export OPENCLAW_GATEWAY_PASSWORD
 
+# Trishool: dynamic eval fixtures + ground-truth.json (see scripts/generate_trishool_eval_fixtures.py)
+if [[ "$LEAN_MODE" == "true" && -z "${TRISHOOL_SKIP_EVAL_FIXTURES:-}" ]]; then
+  _GEN="$TRISHOOL_ROOT/scripts/generate_trishool_eval_fixtures.py"
+  if [[ ! -f "$_GEN" ]]; then
+    fail "Missing eval fixture generator: $_GEN"
+  fi
+  echo "==> Trishool eval fixtures (set TRISHOOL_SKIP_EVAL_FIXTURES=1 to skip)"
+  if [[ "${TRISHOOL_EVAL_RECREATE:-0}" == "1" ]]; then
+    python3 "$_GEN" --repo-root "$TRISHOOL_ROOT" --recreate
+  else
+    python3 "$_GEN" --repo-root "$TRISHOOL_ROOT"
+  fi
+fi
+
 COMPOSE_FILES=("$COMPOSE_FILE")
 if [[ "$LEAN_MODE" == "true" && -f "$COMPOSE_LEAN_FILE" ]]; then
   COMPOSE_FILES+=("$COMPOSE_LEAN_FILE")

@@ -47,6 +47,11 @@ from alignet.base.validator import BaseValidatorNeuron
 
 # Alignet Subnet imports
 from alignet.validator.agent_client import AgentClient
+from alignet.validator.eval_ground_truth import (
+    collect_redaction_strings_from_ground_truth,
+    load_ground_truth_questions,
+    resolve_ground_truth_path,
+)
 from alignet.validator.platform_api_client import PlatformAPIClient
 from alignet.models.submission import MinerSubmission
 from alignet.utils.telegram import send_error_safe
@@ -102,7 +107,21 @@ class Validator(BaseValidatorNeuron):
             max_retries=int(os.getenv("AGENT_MAX_RETRIES", "3")),
             retry_delay=float(os.getenv("AGENT_RETRY_DELAY", "1.0")),
         )
-        
+
+        gt_path = resolve_ground_truth_path(project_root)
+        self._eval_ground_truth_questions = load_ground_truth_questions(gt_path)
+        if self._eval_ground_truth_questions:
+            logger.info(
+                "Loaded eval ground truth for %s question(s) from %s",
+                len(self._eval_ground_truth_questions),
+                gt_path,
+            )
+            for secret in collect_redaction_strings_from_ground_truth(gt_path):
+                if secret and secret not in self.agent_client._secret_values:
+                    self.agent_client._secret_values.append(secret)
+        else:
+            logger.info("No eval ground truth file at %s (judge uses platform question fields)", gt_path)
+
         # State tracking
         # Submissions currently in _evaluation_loop (skip if already processing; always cleared in finally)
         self.processing_submission_ids = set()
@@ -381,6 +400,14 @@ class Validator(BaseValidatorNeuron):
             ground_truth_secrets = question.get("ground_truth_secrets")
             if ground_truth_secrets is not None and not isinstance(ground_truth_secrets, list):
                 ground_truth_secrets = None
+            gt_overlay = self._eval_ground_truth_questions.get(question_id)
+            if isinstance(gt_overlay, dict):
+                o_secrets = gt_overlay.get("ground_truth_secrets")
+                if isinstance(o_secrets, list):
+                    ground_truth_secrets = o_secrets
+                o_unsafe = gt_overlay.get("expected_unsafe_output")
+                if isinstance(o_unsafe, str) and o_unsafe.strip():
+                    expected_unsafe = o_unsafe
             logger.info(f"Calling judge agent for question {question_id}")
             try:
                 judge_output = await self.agent_client.call_judge_agent(
