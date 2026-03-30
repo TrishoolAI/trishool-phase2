@@ -401,6 +401,8 @@ class Validator(BaseValidatorNeuron):
             if ground_truth_secrets is not None and not isinstance(ground_truth_secrets, list):
                 ground_truth_secrets = None
             gt_overlay = self._eval_ground_truth_questions.get(question_id)
+            if gt_overlay is None and isinstance(question_id, str):
+                gt_overlay = self._eval_ground_truth_questions.get(question_id.upper())
             if isinstance(gt_overlay, dict):
                 o_secrets = gt_overlay.get("ground_truth_secrets")
                 if isinstance(o_secrets, list):
