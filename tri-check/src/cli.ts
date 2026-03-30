@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_QUESTIONS_PATH, loadEnvFiles, resolveServiceUrls, TRI_CHECK_ROOT } from "./env.js";
+import { collectFixtureRedactStrings, loadGroundTruthQuestionsById } from "./groundTruth.js";
 import { writeReportFile } from "./io.js";
 import { logChutesKey, printRunSummary, runDirect, runFromSubmission } from "./run.js";
 
@@ -28,6 +29,8 @@ Options:
 Env (see .env.example):
   OPENCLAW_URL, OPENCLAW_GATEWAY_PASSWORD or OPENCLAW_GATEWAY_TOKEN,
   JUDGE_URL, CHUTES_API_KEY (optional)
+  TRISHOOL_EVAL_GROUND_TRUTH — path to ground-truth.json (optional; default ../tri-claw/docker/eval-fixtures/)
+  TRI_CHECK_NO_GROUND_TRUTH=1 — do not merge fixture ground truth (use rubric file only)
 
 Examples:
   cd tri-check && pnpm install && pnpm eval --submission ../alignet/cli/my_submission.json
@@ -161,11 +164,22 @@ async function main(): Promise<void> {
     judgeUrl: parsed.judgeUrl,
   });
 
+  const groundTruthLoaded = loadGroundTruthQuestionsById();
+  const groundTruthById = groundTruthLoaded?.byId;
+  const fixtureRedact = groundTruthById ? collectFixtureRedactStrings(groundTruthById) : [];
+  if (groundTruthLoaded) {
+    process.stderr.write(
+      `[tri-check] Judge rubric overlay: ${groundTruthLoaded.byId.size} question(s) from ${groundTruthLoaded.path}\n`,
+    );
+  }
+
   const options = {
     openclawUrl: urls.openclawUrl,
     judgeUrl: urls.judgeUrl,
     urls,
     verbose: parsed.verbose,
+    groundTruthById,
+    fixtureRedact,
   };
 
   logChutesKey(urls);
