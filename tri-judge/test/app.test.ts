@@ -236,7 +236,7 @@ describe("createApp", () => {
     await upstream.close();
   });
 
-  it("returns an upstream timeout error", async () => {
+  it("returns 200 with upstream transport error in judgeReasoning when the upstream times out", async () => {
     const upstream = await startMockOpenAiServer(async (req, res) => {
       await new Promise((resolve) => setTimeout(resolve, 300));
       res.writeHead(200, { "content-type": "application/json" });
@@ -273,10 +273,15 @@ describe("createApp", () => {
       payload: buildRequestBody(),
     });
 
-    expect(response.statusCode).toBe(504);
-    expect(response.json()).toEqual({
-      error: "Judge upstream request timed out.",
-    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as Record<string, unknown>;
+    expect(body.judgeVerdict).toBe("safe");
+    expect(body.score).toBe(0);
+    expect(body.deobfuscatedPrompt).toBe("error");
+    expect(body.prompt).toBe("Original prompt");
+    expect(body.modelResponse).toBe("Model output");
+    expect(String(body.judgeReasoning)).toMatch(/Judge upstream transport error \(HTTP 504\)/);
+    expect(String(body.judgeReasoning)).toMatch(/timed out/i);
 
     await app.close();
     await upstream.close();
