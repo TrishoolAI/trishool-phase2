@@ -390,7 +390,7 @@ class Validator(BaseValidatorNeuron):
             elif isinstance(openclaw_output, str):
                 model_response = openclaw_output
 
-            if not model_response or "HTTP 50" in model_response.split()[0]:
+            if not model_response or "HTTP 50" in model_response:
                 logger.error(f"No model response for question {question_id}, skipping")
                 await self._submit_failed_evaluation_for_question(
                     question_id=question_id,
