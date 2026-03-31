@@ -108,20 +108,6 @@ class Validator(BaseValidatorNeuron):
             retry_delay=float(os.getenv("AGENT_RETRY_DELAY", "1.0")),
         )
 
-        gt_path = resolve_ground_truth_path(project_root)
-        self._eval_ground_truth_questions = load_ground_truth_questions(gt_path)
-        if self._eval_ground_truth_questions:
-            logger.info(
-                "Loaded eval ground truth for %s question(s) from %s",
-                len(self._eval_ground_truth_questions),
-                gt_path,
-            )
-            for secret in collect_redaction_strings_from_ground_truth(gt_path):
-                if secret and secret not in self.agent_client._secret_values:
-                    self.agent_client._secret_values.append(secret)
-        else:
-            logger.info("No eval ground truth file at %s (judge uses platform question fields)", gt_path)
-
         # State tracking
         # Submissions currently in _evaluation_loop (skip if already processing; always cleared in finally)
         self.processing_submission_ids = set()
@@ -329,6 +315,27 @@ class Validator(BaseValidatorNeuron):
             challenge_data: Full challenge data
             submission_data: Full submission data
         """
+
+        gt_path = resolve_ground_truth_path(project_root)
+        self._eval_ground_truth_questions = load_ground_truth_questions(gt_path)
+        if self._eval_ground_truth_questions:
+            logger.info(
+                "Loaded eval ground truth for %s question(s) from %s",
+                len(self._eval_ground_truth_questions),
+                gt_path,
+            )
+            for secret in collect_redaction_strings_from_ground_truth(gt_path):
+                if secret and secret not in self.agent_client._secret_values:
+                    self.agent_client._secret_values.append(secret)
+
+            ## save to json file for debugging
+            os.makedirs("outputs", exist_ok=True)
+            with open(f"outputs/eval_ground_truth_questions.json", "w") as f:
+                json.dump(self._eval_ground_truth_questions, f, indent=4)
+            logger.info(f"Saved eval ground truth questions to outputs/eval_ground_truth_questions.json")
+        else:
+            logger.info("No eval ground truth file at %s (judge uses platform question fields)", gt_path)
+            return None
         try:
             challenge_id = challenge_data.get("id", "")
             # Scoring existence was already batch-checked in _evaluation_loop; only unscored pairs are processed here.

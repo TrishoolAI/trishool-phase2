@@ -28,7 +28,7 @@ PM2_RESTART_TIMEOUT = 30  # seconds
 PM2_RESTART_RETRIES = 3
 
 # Docker tri-claw / tri-judge restart (docker-down.sh + docker-up.sh)
-DOCKER_AGENT_RESTART_TIMEOUT = int(os.getenv("DOCKER_AGENT_RESTART_TIMEOUT", "100"))  # seconds
+DOCKER_AGENT_RESTART_TIMEOUT = int(os.getenv("DOCKER_AGENT_RESTART_TIMEOUT", "200"))  # seconds
 
 # Repository Local Path (for git pull)
 # Default to project root (3 levels up from alignet/validator/constants.py)
