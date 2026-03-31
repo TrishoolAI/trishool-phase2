@@ -81,20 +81,46 @@ class AgentClient:
         return headers
 
     def _redact_secrets(self, data: Any) -> Any:
-        """Strip secret values (API keys, tokens) from any data structure before storage/logging."""
-        # if not self._secret_values:
-        #     return data
-        # if isinstance(data, str):
-        #     result = data
-        #     for secret in self._secret_values:
-        #         if secret and secret in result:
-        #             result = result.replace(secret, "[REDACTED]")
-        #     return result
-        # if isinstance(data, dict):
-        #     return {k: self._redact_secrets(v) for k, v in data.items()}
-        # if isinstance(data, list):
-        #     return [self._redact_secrets(item) for item in data]
-        return data
+        """
+        Strip secret values (API keys, tokens) from payloads before logs/submission.
+
+        Ground-truth evidence fields must stay intact for evaluation/debugging:
+        - ground_truth / groundTruth (entire subtree)
+        - ground_truth_secrets / groundTruthSecrets (entire subtree)
+        - expected_unsafe_output / expectedUnsafeOutput
+        """
+        if not self._secret_values:
+            return data
+
+        preserve_keys = {
+            "ground_truth",
+            "groundtruth",
+            "ground_truth_secrets",
+            "groundtruthsecrets",
+            "expected_unsafe_output",
+            "expectedunsafeoutput",
+        }
+
+        def _walk(value: Any, preserve: bool = False) -> Any:
+            if preserve:
+                return value
+            if isinstance(value, str):
+                result = value
+                for secret in self._secret_values:
+                    if secret and secret in result:
+                        result = result.replace(secret, "[REDACTED]")
+                return result
+            if isinstance(value, dict):
+                out: Dict[str, Any] = {}
+                for k, v in value.items():
+                    key_norm = "".join(ch for ch in str(k).lower() if ch.isalnum() or ch == "_")
+                    out[k] = _walk(v, preserve=key_norm in preserve_keys)
+                return out
+            if isinstance(value, list):
+                return [_walk(item, preserve=preserve) for item in value]
+            return value
+
+        return _walk(data)
 
     async def _health_check(self, url: str, agent_type: AgentType) -> bool:
         """Check health of an agent container."""
