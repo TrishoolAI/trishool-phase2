@@ -123,80 +123,6 @@ class AgentClient:
 
         return _walk(data)
 
-    def _extract_assistant_content(self, payload: Dict[str, Any]) -> str:
-        """Extract OpenAI-style assistant content from tri-claw payload."""
-        if not isinstance(payload, dict):
-            return ""
-        choices = payload.get("choices")
-        if not isinstance(choices, list) or not choices:
-            return ""
-        first = choices[0]
-        if not isinstance(first, dict):
-            return ""
-        msg = first.get("message")
-        if not isinstance(msg, dict):
-            return ""
-        content = msg.get("content")
-        return content if isinstance(content, str) else ""
-
-    def _is_embedded_http_error(self, content: str) -> bool:
-        """
-        Detect tri-claw responses that are actually upstream HTTP errors serialized as text.
-        Example: 'HTTP 503: {"detail":"No instances available ..."}'
-        """
-        if not content:
-            return False
-        text = content.strip()
-        return bool(re.match(r"^HTTP\s+[1-5]\d{2}\s*:", text, flags=re.IGNORECASE))
-
-    async def _health_check(self, url: str, agent_type: AgentType) -> bool:
-        """Check health of an agent container."""
-        try:
-            endpoint = f"{url}/health"
-            headers = {}
-            if agent_type == AgentType.TRI_CLAW and (self.openclaw_token or self.chutes_api_key):
-                headers = self._tri_claw_headers()
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
-                async with session.get(endpoint, headers=headers or None) as response:
-                    return response.status == 200
-        except Exception as e:
-            logger.debug(f"Health check failed for {agent_type.value} at {url}: {e}")
-            return False
-
-    # async def _health_check_loop(self):
-    #     """Background task to periodically check health of both agents."""
-    #     logger.info("Starting health check loop")
-    #     while not self._should_stop_health_check:
-    #         try:
-    #             self.tri_claw_healthy = await self._health_check(self.tri_claw_url, AgentType.TRI_CLAW)
-    #             if not self.tri_claw_healthy:
-    #                 logger.warning(f"Tri-claw at {self.tri_claw_url} is unhealthy")
-    #             self.judge_healthy = await self._health_check(self.judge_url, AgentType.JUDGE)
-    #             if not self.judge_healthy:
-    #                 logger.warning(f"Judge at {self.judge_url} is unhealthy")
-    #             await asyncio.sleep(self.health_check_interval)
-    #         except asyncio.CancelledError:
-    #             logger.info("Health check loop cancelled")
-    #             break
-    #         except Exception as e:
-    #             logger.error(f"Error in health check loop: {e}")
-    #             await asyncio.sleep(self.health_check_interval)
-    #     logger.info("Health check loop stopped")
-
-    # def start_health_checks(self):
-    #     """Start background health check task."""
-    #     if self.health_check_task is None or self.health_check_task.done():
-    #         self._should_stop_health_check = False
-    #         self.health_check_task = asyncio.create_task(self._health_check_loop())
-    #         logger.info("Health check task started")
-
-    # def stop_health_checks(self):
-    #     """Stop background health check task."""
-    #     self._should_stop_health_check = True
-    #     if self.health_check_task and not self.health_check_task.done():
-    #         self.health_check_task.cancel()
-    #         logger.info("Health check task stopped")
-
     async def call_tri_claw_agent(
         self,
         prompt: str,
@@ -230,16 +156,6 @@ class AgentClient:
                     async with session.post(endpoint, json=payload, headers=headers) as response:
                         if response.status == 200:
                             result = await response.json()
-                            maybe_error = self._extract_assistant_content(result)
-                            if self._is_embedded_http_error(maybe_error):
-                                last_error = self._redact_secrets(maybe_error)
-                                logger.warning(
-                                    f"Tri-claw returned embedded upstream error "
-                                    f"(attempt {attempt + 1}/{self.max_retries}): {last_error}"
-                                )
-                                if attempt < self.max_retries - 1:
-                                    await asyncio.sleep(self.retry_delay * (attempt + 1))
-                                continue
                             logger.info(
                                 f"Tri-claw success for submission {submission_id} "
                                 f"(attempt {attempt + 1})"
