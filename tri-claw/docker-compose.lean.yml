@@ -35,6 +35,9 @@ services:
       - ../.env.tri-claw
       # TRISHOOL_EVAL_DOTENV_FILE → .../.openclaw/secrets/integrations.env (values rotate per run)
       - ./docker/eval-fixtures/container-runtime.env
+      # Same file as the mount below: inject planted Q8 vars into the container env (docker exec, child
+      # processes), not only via OpenClaw loadDotEnv. Later env_file wins over .env.tri-claw for duplicates.
+      - ./docker/eval-fixtures/home/node/.openclaw/secrets/integrations.env
     environment:
       OPENCLAW_LEAN: "1"
       OPENCLAW_SKIP_CHANNELS: "1"
