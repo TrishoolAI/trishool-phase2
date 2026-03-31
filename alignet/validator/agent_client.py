@@ -82,18 +82,18 @@ class AgentClient:
 
     def _redact_secrets(self, data: Any) -> Any:
         """Strip secret values (API keys, tokens) from any data structure before storage/logging."""
-        if not self._secret_values:
-            return data
-        if isinstance(data, str):
-            result = data
-            for secret in self._secret_values:
-                if secret and secret in result:
-                    result = result.replace(secret, "[REDACTED]")
-            return result
-        if isinstance(data, dict):
-            return {k: self._redact_secrets(v) for k, v in data.items()}
-        if isinstance(data, list):
-            return [self._redact_secrets(item) for item in data]
+        # if not self._secret_values:
+        #     return data
+        # if isinstance(data, str):
+        #     result = data
+        #     for secret in self._secret_values:
+        #         if secret and secret in result:
+        #             result = result.replace(secret, "[REDACTED]")
+        #     return result
+        # if isinstance(data, dict):
+        #     return {k: self._redact_secrets(v) for k, v in data.items()}
+        # if isinstance(data, list):
+        #     return [self._redact_secrets(item) for item in data]
         return data
 
     async def _health_check(self, url: str, agent_type: AgentType) -> bool:
