@@ -41,6 +41,19 @@ require_cmd() {
   fi
 }
 
+# Prefer python3; fall back to python if it is Python 3.8+ (validator / CI hosts vary).
+_trishool_resolve_python() {
+  local c
+  for c in python3 python; do
+    if command -v "$c" >/dev/null 2>&1 \
+      && "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' >/dev/null 2>&1; then
+      echo "$c"
+      return 0
+    fi
+  done
+  return 1
+}
+
 contains_disallowed_chars() {
   local value="$1"
   [[ "$value" == *$'\n'* || "$value" == *$'\r'* || "$value" == *$'\t'* ]]
@@ -185,6 +198,21 @@ else
 fi
 export OPENCLAW_GATEWAY_TOKEN
 export OPENCLAW_GATEWAY_PASSWORD
+
+# Trishool: dynamic eval fixtures + ground-truth.json (see scripts/generate_trishool_eval_fixtures.py)
+if [[ "$LEAN_MODE" == "true" && -z "${TRISHOOL_SKIP_EVAL_FIXTURES:-}" ]]; then
+  _GEN="$TRISHOOL_ROOT/scripts/generate_trishool_eval_fixtures.py"
+  if [[ ! -f "$_GEN" ]]; then
+    fail "Missing eval fixture generator: $_GEN"
+  fi
+  _PY="$(_trishool_resolve_python)" || fail "Need Python 3.8+ as python3 or python on PATH for eval fixtures (or set TRISHOOL_SKIP_EVAL_FIXTURES=1 to skip)."
+  echo "==> Trishool eval fixtures via ${_PY} (set TRISHOOL_SKIP_EVAL_FIXTURES=1 to skip)"
+  if [[ "${TRISHOOL_EVAL_RECREATE:-0}" == "1" ]]; then
+    "$_PY" "$_GEN" --repo-root "$TRISHOOL_ROOT" --recreate
+  else
+    "$_PY" "$_GEN" --repo-root "$TRISHOOL_ROOT"
+  fi
+fi
 
 COMPOSE_FILES=("$COMPOSE_FILE")
 if [[ "$LEAN_MODE" == "true" && -f "$COMPOSE_LEAN_FILE" ]]; then

@@ -56,9 +56,14 @@ export function formatChutesKeyForLog(key: string): string {
  * Strip secret values (API keys, gateway tokens) from arbitrary strings.
  * Call on any data that may be logged, printed, or persisted.
  */
-export function redactSecrets(text: string, urls: ResolvedServiceUrls): string {
+export function redactSecrets(
+  text: string,
+  urls: ResolvedServiceUrls,
+  fixtureSecrets: string[] = [],
+): string {
   let result = text;
-  for (const secret of [urls.chutesApiKey, urls.openclawToken]) {
+  const all = [urls.chutesApiKey, urls.openclawToken, ...fixtureSecrets];
+  for (const secret of all) {
     if (secret && secret.length > 0 && result.includes(secret)) {
       result = result.replaceAll(secret, "[REDACTED]");
     }
@@ -67,13 +72,13 @@ export function redactSecrets(text: string, urls: ResolvedServiceUrls): string {
 }
 
 /** Deep-walk an object replacing secret values in all string leaves. */
-export function redactSecretsFromObject<T>(data: T, urls: ResolvedServiceUrls): T {
-  if (typeof data === "string") return redactSecrets(data, urls) as T;
-  if (Array.isArray(data)) return data.map((item) => redactSecretsFromObject(item, urls)) as T;
+export function redactSecretsFromObject<T>(data: T, urls: ResolvedServiceUrls, fixtureSecrets: string[] = []): T {
+  if (typeof data === "string") return redactSecrets(data, urls, fixtureSecrets) as T;
+  if (Array.isArray(data)) return data.map((item) => redactSecretsFromObject(item, urls, fixtureSecrets)) as T;
   if (data && typeof data === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(data)) {
-      out[k] = redactSecretsFromObject(v, urls);
+      out[k] = redactSecretsFromObject(v, urls, fixtureSecrets);
     }
     return out as T;
   }

@@ -1,6 +1,7 @@
 import { callJudge, isSuccessfulJailbreak } from "./clients/judge.js";
 import { callOpenClaw } from "./clients/openclaw.js";
 import { formatChutesKeyForLog, redactSecrets, redactSecretsFromObject, type ResolvedServiceUrls } from "./env.js";
+import { overlayMetaLookup } from "./groundTruth.js";
 import { indexQuestionsById, loadQuestionsFromPath, loadSubmission } from "./io.js";
 import type {
   CliOutputReport,
@@ -15,18 +16,35 @@ export interface RunOptions {
   judgeUrl: string;
   urls: ResolvedServiceUrls;
   verbose: boolean;
+  /** Optional: same `questions` map as validator `ground-truth.json` — merges judge secrets / expected_unsafe. */
+  groundTruthById?: Map<string, QuestionMeta>;
+  /** Substrings from ground truth for log redaction. */
+  fixtureRedact?: string[];
 }
 
 function metaForId(
   id: string,
   byId: Map<string, QuestionMeta> | undefined,
+  groundTruthById?: Map<string, QuestionMeta>,
 ): { objective: string; expectedSafe: string; expectedUnsafe: string; secrets?: string[] } {
-  const q = byId?.get(id);
+  const q =
+    byId?.get(id) ?? byId?.get(id.toUpperCase()) ?? byId?.get(id.toLowerCase());
+  const gt = overlayMetaLookup(id, groundTruthById);
+  let expectedUnsafe = q?.expected_unsafe_output ?? "";
+  let secrets = q?.ground_truth_secrets;
+  if (gt) {
+    if (gt.ground_truth_secrets !== undefined && Array.isArray(gt.ground_truth_secrets)) {
+      secrets = gt.ground_truth_secrets;
+    }
+    if (gt.expected_unsafe_output !== undefined && gt.expected_unsafe_output.trim() !== "") {
+      expectedUnsafe = gt.expected_unsafe_output;
+    }
+  }
   return {
     objective: q?.objective ?? q?.question_id ?? q?.id ?? id,
     expectedSafe: q?.expected_safe_behavior ?? "",
-    expectedUnsafe: q?.expected_unsafe_output ?? "",
-    secrets: q?.ground_truth_secrets,
+    expectedUnsafe,
+    secrets,
   };
 }
 
@@ -135,8 +153,9 @@ async function evaluateOne(params: {
   meta: ReturnType<typeof metaForId>;
   submissionMeta?: SubmissionEntry;
   verbose: boolean;
+  fixtureRedact: string[];
 }): Promise<PerQuestionResult> {
-  const { id, prompt, openclawBase, judgeBase, urls, meta, submissionMeta, verbose } = params;
+  const { id, prompt, openclawBase, judgeBase, urls, meta, submissionMeta, verbose, fixtureRedact } = params;
   const metadata = submissionMeta
     ? {
         technique: submissionMeta.technique,
@@ -175,7 +194,11 @@ async function evaluateOne(params: {
     if (verbose) {
       printVerbose(`${id} OpenClaw request`, { base: openclawBase, promptLength: prompt.length });
     }
-    openclawResponse = redactSecrets(await callOpenClaw(openclawBase, urls, prompt), urls);
+    openclawResponse = redactSecrets(
+      await callOpenClaw(openclawBase, urls, prompt),
+      urls,
+      fixtureRedact,
+    );
     if (verbose) {
       printVerbose(`${id} OpenClaw response preview`, {
         length: openclawResponse.length,
@@ -183,7 +206,7 @@ async function evaluateOne(params: {
       });
     }
   } catch (e) {
-    const msg = redactSecrets(e instanceof Error ? e.message : String(e), urls);
+    const msg = redactSecrets(e instanceof Error ? e.message : String(e), urls, fixtureRedact);
     printSection("Error", `OpenClaw: ${msg}`);
     printQuestionEndSeparator();
     return {
@@ -210,7 +233,7 @@ async function evaluateOne(params: {
       expectedUnsafe: meta.expectedUnsafe,
       groundTruthSecrets: meta.secrets,
     });
-    const judgeResult = redactSecretsFromObject(judgeResultRaw, urls);
+    const judgeResult = redactSecretsFromObject(judgeResultRaw, urls, fixtureRedact);
     if (verbose) {
       printVerbose(`${id} Judge result`, judgeResult);
     }
@@ -234,7 +257,7 @@ async function evaluateOne(params: {
       metadata,
     };
   } catch (e) {
-    const msg = redactSecrets(e instanceof Error ? e.message : String(e), urls);
+    const msg = redactSecrets(e instanceof Error ? e.message : String(e), urls, fixtureRedact);
     printSection("Error", `Judge: ${msg}`);
     printQuestionEndSeparator();
     return {
@@ -267,7 +290,7 @@ export async function runFromSubmission(args: {
     if (!entry || typeof entry !== "object") {
       results.push({
         id,
-        objective: metaForId(id, byId).objective,
+        objective: metaForId(id, byId, args.options.groundTruthById).objective,
         promptSubmitted: "",
         openclawUrlUsed: args.options.openclawUrl,
         openclawResponse: "",
@@ -281,7 +304,7 @@ export async function runFromSubmission(args: {
     const prompt = typeof entry.prompt === "string" ? entry.prompt : "";
     const perUrl = entry.url !== undefined && String(entry.url).trim() !== "" ? String(entry.url).replace(/\/$/, "") : undefined;
     const openclawBase = perUrl ?? args.options.openclawUrl;
-    const meta = metaForId(id, byId);
+    const meta = metaForId(id, byId, args.options.groundTruthById);
     const r = await evaluateOne({
       id,
       prompt,
@@ -291,6 +314,7 @@ export async function runFromSubmission(args: {
       meta,
       submissionMeta: entry,
       verbose: args.options.verbose,
+      fixtureRedact: args.options.fixtureRedact ?? [],
     });
     results.push(r);
   }
@@ -309,7 +333,7 @@ export async function runDirect(args: {
     const questions = loadQuestionsFromPath(args.questionsPath);
     byId = indexQuestionsById(questions);
   }
-  const meta = metaForId(args.questionId, byId);
+  const meta = metaForId(args.questionId, byId, args.options.groundTruthById);
   if (!args.questionsPath) {
     process.stderr.write(
       "[tri-check] note: no --questions file; judge expected safe/unsafe text may be empty — scoring may be less meaningful.\n",
@@ -323,6 +347,7 @@ export async function runDirect(args: {
     urls: args.options.urls,
     meta,
     verbose: args.options.verbose,
+    fixtureRedact: args.options.fixtureRedact ?? [],
   });
   return summarizeReport([r]);
 }
