@@ -9,9 +9,13 @@ SCRIPT_PATH="$ROOT/$(basename "${BASH_SOURCE[0]}")"
 # shellcheck source=scripts/ensure-trishool-env.sh
 source "$ROOT/scripts/ensure-trishool-env.sh"
 ensure_trishool_root_env "$ROOT"
-# If we can't talk to Docker (e.g. session not in docker group), re-run with docker group
+# Linux: if not in docker group yet, re-run with that group (sg is from util-linux; absent on macOS).
 if ! docker info &>/dev/null; then
-  exec sg docker -c "$(printf '%q ' "$SCRIPT_PATH" "$@")"
+  if command -v sg >/dev/null 2>&1; then
+    exec sg docker -c "$(printf '%q ' "$SCRIPT_PATH" "$@")"
+  fi
+  echo "docker-down.sh: cannot reach Docker (try starting Docker Desktop, or on Linux fix socket permissions / docker group)." >&2
+  exit 1
 fi
 
 COMPOSE_ENV_FILES=(--env-file "$ROOT/.env" --env-file "$ROOT/.env.tri-claw" --env-file "$ROOT/.env.tri-judge")

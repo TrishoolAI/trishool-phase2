@@ -9,9 +9,13 @@ SCRIPT_PATH="$ROOT/$(basename "${BASH_SOURCE[0]}")"
 # shellcheck source=scripts/ensure-trishool-env.sh
 source "$ROOT/scripts/ensure-trishool-env.sh"
 ensure_trishool_root_env "$ROOT"
-# If we can't talk to Docker (e.g. session not in docker group), re-run with docker group
+# Linux: if not in docker group yet, re-run with that group (sg is from util-linux; absent on macOS).
 if ! docker info &>/dev/null; then
-  exec sg docker -c "$(printf '%q ' "$SCRIPT_PATH" "$@")"
+  if command -v sg >/dev/null 2>&1; then
+    exec sg docker -c "$(printf '%q ' "$SCRIPT_PATH" "$@")"
+  fi
+  echo "docker-up.sh: cannot reach Docker (try starting Docker Desktop, or on Linux fix socket permissions / docker group)." >&2
+  exit 1
 fi
 
 # Strip trishool-only flags before docker compose (unknown service names / options)
@@ -32,9 +36,10 @@ done
 docker network inspect tri-shared &>/dev/null || docker network create tri-shared
 
 # tri-claw lean (runs docker-setup.sh --lean --build; generates eval fixtures when lean)
+# Bash 3.2 + set -u: plain "${FORWARD_ARGS[@]}" errors when the array is empty; use +-guard (see tri-claw/docker-setup.sh).
 TRISHOOL_EVAL_RECREATE="$TRISHOOL_EVAL_RECREATE" \
-  "$ROOT/tri-claw/docker-setup-lean.sh" --build "${FORWARD_ARGS[@]}"
+  "$ROOT/tri-claw/docker-setup-lean.sh" --build ${FORWARD_ARGS[@]+"${FORWARD_ARGS[@]}"}
 
 # tri-judge (explicit project name so we never inherit COMPOSE_PROJECT_NAME=tri-claw from .env.tri-claw)
 cd "$ROOT/tri-judge"
-docker compose -p tri-judge --env-file "$ROOT/.env" --env-file "$ROOT/.env.tri-judge" up -d --build "${FORWARD_ARGS[@]}"
+docker compose -p tri-judge --env-file "$ROOT/.env" --env-file "$ROOT/.env.tri-judge" up -d --build ${FORWARD_ARGS[@]+"${FORWARD_ARGS[@]}"}
