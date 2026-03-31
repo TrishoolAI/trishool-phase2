@@ -438,6 +438,7 @@ class Validator(BaseValidatorNeuron):
                     surface_area=surface_area,
                     error_message=error_msg,
                     openclaw_output=openclaw_output,
+                    ground_truth=self._eval_ground_truth_questions
                 )
                 return
 
@@ -450,6 +451,7 @@ class Validator(BaseValidatorNeuron):
                     surface_area=surface_area,
                     error_message=f"Judge output is not a dictionary and does not contain score for question {question_id}. This is response from judge agent: {judge_output}",
                     openclaw_output=openclaw_output,
+                    ground_truth=self._eval_ground_truth_questions
                 )
                 return
             # Step 5: Submit scoring with question_id (include openclaw_output and judge_output)
@@ -460,6 +462,7 @@ class Validator(BaseValidatorNeuron):
                 surface_area=surface_area,
                 openclaw_output=openclaw_output,
                 judge_output=judge_output,
+                ground_truth=self._eval_ground_truth_questions
             )
             
         except Exception as e:
@@ -469,6 +472,7 @@ class Validator(BaseValidatorNeuron):
                 submission_id=submission_id,
                 challenge_id=challenge_data.get("id", ""),
                 error_message=f"Exception during processing: {str(e)}",
+                ground_truth=self._eval_ground_truth_questions
             )
     
     def _redact_payload(self, data: Any) -> Any:
@@ -483,6 +487,7 @@ class Validator(BaseValidatorNeuron):
         surface_area: int = 1,
         error_message: str = "",
         openclaw_output: Optional[Dict[str, Any]] = None,
+        ground_truth: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Submit failed evaluation for a single question to platform.
@@ -494,6 +499,7 @@ class Validator(BaseValidatorNeuron):
             error_message: Error message describing the failure
             surface_area: Surface area version (1-5)
             openclaw_output: Tri-claw output if available (e.g. failed after tri-claw)
+            ground_truth: Ground truth questions
         """
         try:
             logger.info(f"Submitting failed evaluation for question {question_id}, submission {submission_id}: {error_message}")
@@ -515,6 +521,7 @@ class Validator(BaseValidatorNeuron):
             }
             if openclaw_output:
                 request["judge_output"]["openclaw_output"] = openclaw_output
+            request["judge_output"]["ground_truth"] = ground_truth
 
             request = self._redact_payload(request)
             result = await self.api_client.submit_judge_output(
@@ -535,6 +542,7 @@ class Validator(BaseValidatorNeuron):
         surface_area: int,
         openclaw_output: Dict[str, Any],
         judge_output: Dict[str, Any],
+        ground_truth: Dict[str, Any] = {},
     ) -> None:
         """
         Submit scoring for a single question to platform, including tri-claw and judge outputs.
@@ -546,6 +554,7 @@ class Validator(BaseValidatorNeuron):
             surface_area: Surface area version (1-5)
             openclaw_output: Full tri-claw (OpenClaw) API response
             judge_output: Full judge API response (judgeVerdict, score, judgeReasoning)
+            ground_truth: Ground truth questions
         """
         try:
             score = int(judge_output.get("score", 0)) if isinstance(judge_output.get("score"), (int, float)) else 0
@@ -561,6 +570,8 @@ class Validator(BaseValidatorNeuron):
             if openclaw_output:
                 judge_payload["openclaw_output"] = openclaw_output
 
+            judge_payload["ground_truth"] = ground_truth
+
             request = {
                 "submission_id": submission_id,
                 "challenge_id": challenge_id,
@@ -570,6 +581,7 @@ class Validator(BaseValidatorNeuron):
                 "question_id": question_id,
                 "evaluation_status": "SUCCESS",
                 "judge_output": judge_payload,
+                "ground_truth": ground_truth,
             }
 
             request = self._redact_payload(request)
