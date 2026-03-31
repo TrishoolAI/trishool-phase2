@@ -42,6 +42,8 @@ Use an alignet-style file like [`../alignet/cli/sample_submission.json`](../alig
 
 By default, rubric metadata is read from **[`data/questions.json`](./data/questions.json)** inside this package (JSON **array** of objects with **`question_id`** (e.g. `"Q1"`), or `{ "questions": [...] }`). Repo [`../eval/questions.json`](../eval/questions.json) uses legacy **`id`**; that still works. Override with **`--questions <path>`** when needed.
 
+**Dynamic eval fixtures (Q7–Q12):** if [`../tri-claw/docker/eval-fixtures/ground-truth.json`](../tri-claw/docker/eval-fixtures/ground-truth.json) exists (after `bash docker-up.sh` / `generate_trishool_eval_fixtures.py`), tri-check **merges** it into the judge payload the same way the validator does: for each matching `question_id`, **`ground_truth_secrets`** and **`expected_unsafe_output`** come from that file so they match the live container secrets. Objectives and **`expected_safe_behavior`** still come from `data/questions.json`. Set **`TRI_CHECK_NO_GROUND_TRUTH=1`** to use only the rubric file. Optional **`TRISHOOL_EVAL_GROUND_TRUTH`** selects a different JSON path.
+
 ```bash
 pnpm eval --submission data/example-submission.json
 ```
@@ -85,6 +87,8 @@ See [`.env.example`](./.env.example). Typical variables:
 | `JUDGE_URL` | Judge API base URL |
 | `CHUTES_API_KEY` | Optional; sent as `X-Chutes-Api-Key` on both calls |
 | `TRI_CHECK_REVEAL_CHUTES_KEY=1` | Log full Chutes key in verbose mode (avoid in shared logs) |
+| `TRISHOOL_EVAL_GROUND_TRUTH` | Path to `ground-truth.json` (default: `tri-claw/docker/eval-fixtures/…` under repo root) |
+| `TRI_CHECK_NO_GROUND_TRUTH=1` | Skip merging fixture ground truth; judge uses rubric JSON only |
 
 ## Output format
 

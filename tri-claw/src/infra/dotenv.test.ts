@@ -96,4 +96,23 @@ describe("loadDotEnv", () => {
       });
     });
   });
+
+  it("loads TRISHOOL_EVAL_DOTENV_FILE instead of state .env when set", async () => {
+    await withIsolatedEnvAndCwd(async () => {
+      await withDotEnvFixture(async ({ cwdDir, stateDir }) => {
+        const customEnv = path.join(stateDir, "secrets", "integrations.env");
+        await writeEnvFile(customEnv, "FOO=from-trishool\n");
+        await writeEnvFile(path.join(stateDir, ".env"), "FOO=from-global\n");
+
+        process.chdir(cwdDir);
+        delete process.env.FOO;
+        process.env.TRISHOOL_EVAL_DOTENV_FILE = customEnv;
+
+        loadDotEnv({ quiet: true });
+
+        expect(process.env.FOO).toBe("from-trishool");
+        delete process.env.TRISHOOL_EVAL_DOTENV_FILE;
+      });
+    });
+  });
 });

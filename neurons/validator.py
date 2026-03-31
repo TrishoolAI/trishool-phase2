@@ -47,6 +47,11 @@ from alignet.base.validator import BaseValidatorNeuron
 
 # Alignet Subnet imports
 from alignet.validator.agent_client import AgentClient
+from alignet.validator.eval_ground_truth import (
+    collect_redaction_strings_from_ground_truth,
+    load_ground_truth_questions,
+    resolve_ground_truth_path,
+)
 from alignet.validator.platform_api_client import PlatformAPIClient
 from alignet.models.submission import MinerSubmission
 from alignet.utils.telegram import send_error_safe
@@ -102,7 +107,7 @@ class Validator(BaseValidatorNeuron):
             max_retries=int(os.getenv("AGENT_MAX_RETRIES", "3")),
             retry_delay=float(os.getenv("AGENT_RETRY_DELAY", "1.0")),
         )
-        
+
         # State tracking
         # Submissions currently in _evaluation_loop (skip if already processing; always cleared in finally)
         self.processing_submission_ids = set()
@@ -310,6 +315,27 @@ class Validator(BaseValidatorNeuron):
             challenge_data: Full challenge data
             submission_data: Full submission data
         """
+
+        gt_path = resolve_ground_truth_path(project_root)
+        self._eval_ground_truth_questions = load_ground_truth_questions(gt_path)
+        if self._eval_ground_truth_questions:
+            logger.info(
+                "Loaded eval ground truth for %s question(s) from %s",
+                len(self._eval_ground_truth_questions),
+                gt_path,
+            )
+            for secret in collect_redaction_strings_from_ground_truth(gt_path):
+                if secret and secret not in self.agent_client._secret_values:
+                    self.agent_client._secret_values.append(secret)
+
+            ## save to json file for debugging
+            os.makedirs("outputs", exist_ok=True)
+            with open(f"outputs/eval_ground_truth_questions.json", "w") as f:
+                json.dump(self._eval_ground_truth_questions, f, indent=4)
+            logger.info(f"Saved eval ground truth questions to outputs/eval_ground_truth_questions.json")
+        else:
+            logger.info("No eval ground truth file at %s (judge uses platform question fields)", gt_path)
+            return None
         try:
             challenge_id = challenge_data.get("id", "")
             # Scoring existence was already batch-checked in _evaluation_loop; only unscored pairs are processed here.
@@ -364,14 +390,14 @@ class Validator(BaseValidatorNeuron):
             elif isinstance(openclaw_output, str):
                 model_response = openclaw_output
 
-            if not model_response:
+            if not model_response or "HTTP 50" in model_response:
                 logger.error(f"No model response for question {question_id}, skipping")
                 await self._submit_failed_evaluation_for_question(
                     question_id=question_id,
                     submission_id=submission_id,
                     challenge_id=challenge_id,
                     surface_area=surface_area,
-                    error_message="No model response from tri-claw agent",
+                    error_message=f"No model response from tri-claw agent or HTTP error: {model_response}",
                 )
                 return
             
@@ -381,6 +407,16 @@ class Validator(BaseValidatorNeuron):
             ground_truth_secrets = question.get("ground_truth_secrets")
             if ground_truth_secrets is not None and not isinstance(ground_truth_secrets, list):
                 ground_truth_secrets = None
+            gt_overlay = self._eval_ground_truth_questions.get(question_id)
+            if gt_overlay is None and isinstance(question_id, str):
+                gt_overlay = self._eval_ground_truth_questions.get(question_id.upper())
+            if isinstance(gt_overlay, dict):
+                o_secrets = gt_overlay.get("ground_truth_secrets")
+                if isinstance(o_secrets, list):
+                    ground_truth_secrets = o_secrets
+                o_unsafe = gt_overlay.get("expected_unsafe_output")
+                if isinstance(o_unsafe, str) and o_unsafe.strip():
+                    expected_unsafe = o_unsafe
             logger.info(f"Calling judge agent for question {question_id}")
             try:
                 judge_output = await self.agent_client.call_judge_agent(
@@ -402,6 +438,7 @@ class Validator(BaseValidatorNeuron):
                     surface_area=surface_area,
                     error_message=error_msg,
                     openclaw_output=openclaw_output,
+                    ground_truth=self._eval_ground_truth_questions
                 )
                 return
 
@@ -414,6 +451,7 @@ class Validator(BaseValidatorNeuron):
                     surface_area=surface_area,
                     error_message=f"Judge output is not a dictionary and does not contain score for question {question_id}. This is response from judge agent: {judge_output}",
                     openclaw_output=openclaw_output,
+                    ground_truth=self._eval_ground_truth_questions
                 )
                 return
             # Step 5: Submit scoring with question_id (include openclaw_output and judge_output)
@@ -424,6 +462,7 @@ class Validator(BaseValidatorNeuron):
                 surface_area=surface_area,
                 openclaw_output=openclaw_output,
                 judge_output=judge_output,
+                ground_truth=self._eval_ground_truth_questions
             )
             
         except Exception as e:
@@ -433,6 +472,7 @@ class Validator(BaseValidatorNeuron):
                 submission_id=submission_id,
                 challenge_id=challenge_data.get("id", ""),
                 error_message=f"Exception during processing: {str(e)}",
+                ground_truth=self._eval_ground_truth_questions
             )
     
     def _redact_payload(self, data: Any) -> Any:
@@ -447,6 +487,7 @@ class Validator(BaseValidatorNeuron):
         surface_area: int = 1,
         error_message: str = "",
         openclaw_output: Optional[Dict[str, Any]] = None,
+        ground_truth: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Submit failed evaluation for a single question to platform.
@@ -458,6 +499,7 @@ class Validator(BaseValidatorNeuron):
             error_message: Error message describing the failure
             surface_area: Surface area version (1-5)
             openclaw_output: Tri-claw output if available (e.g. failed after tri-claw)
+            ground_truth: Ground truth questions
         """
         try:
             logger.info(f"Submitting failed evaluation for question {question_id}, submission {submission_id}: {error_message}")
@@ -479,6 +521,7 @@ class Validator(BaseValidatorNeuron):
             }
             if openclaw_output:
                 request["judge_output"]["openclaw_output"] = openclaw_output
+            request["judge_output"]["ground_truth"] = ground_truth
 
             request = self._redact_payload(request)
             result = await self.api_client.submit_judge_output(
@@ -499,6 +542,7 @@ class Validator(BaseValidatorNeuron):
         surface_area: int,
         openclaw_output: Dict[str, Any],
         judge_output: Dict[str, Any],
+        ground_truth: Dict[str, Any] = {},
     ) -> None:
         """
         Submit scoring for a single question to platform, including tri-claw and judge outputs.
@@ -510,6 +554,7 @@ class Validator(BaseValidatorNeuron):
             surface_area: Surface area version (1-5)
             openclaw_output: Full tri-claw (OpenClaw) API response
             judge_output: Full judge API response (judgeVerdict, score, judgeReasoning)
+            ground_truth: Ground truth questions
         """
         try:
             score = int(judge_output.get("score", 0)) if isinstance(judge_output.get("score"), (int, float)) else 0
@@ -525,6 +570,8 @@ class Validator(BaseValidatorNeuron):
             if openclaw_output:
                 judge_payload["openclaw_output"] = openclaw_output
 
+            judge_payload["ground_truth"] = ground_truth
+
             request = {
                 "submission_id": submission_id,
                 "challenge_id": challenge_id,
@@ -534,6 +581,7 @@ class Validator(BaseValidatorNeuron):
                 "question_id": question_id,
                 "evaluation_status": "SUCCESS",
                 "judge_output": judge_payload,
+                "ground_truth": ground_truth,
             }
 
             request = self._redact_payload(request)

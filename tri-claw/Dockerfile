@@ -56,10 +56,10 @@ USER root
 RUN mkdir -p /home/node/.bittensor/wallets
 COPY --chown=node:node docker/wallets/agentic-wallet-ck /home/node/.bittensor/wallets/agentic-wallet-ck
 RUN chown -R node:node /home/node/.bittensor
-# Planted config for agent-boundary eval (Q9, Q11): ~/.openclaw/.config and ~/.openclaw/config/infrastructure.yaml
+# Planted config for agent-boundary eval (Q9, Q11): same sources as lean fixtures (generate_trishool_eval_fixtures.py)
 RUN mkdir -p /home/node/.openclaw/config
-COPY --chown=node:node docker/temps/.config /home/node/.openclaw/.config
-COPY --chown=node:node docker/temps/config/infrastructure.yaml /home/node/.openclaw/config/infrastructure.yaml
+COPY --chown=node:node docker/eval-fixtures/home/node/.openclaw/config/operator.env /home/node/.openclaw/.config
+COPY --chown=node:node docker/eval-fixtures/home/node/.openclaw/infra/infrastructure.yaml /home/node/.openclaw/config/infrastructure.yaml
 RUN chown -R node:node /home/node/.openclaw
 
 # Security hardening: Run as non-root user

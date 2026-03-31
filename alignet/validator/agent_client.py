@@ -9,6 +9,7 @@ import aiohttp
 from typing import Dict, Any, List, Optional
 from enum import Enum
 import os
+import re
 from datetime import datetime
 
 from alignet.utils.logging import get_logger
@@ -81,68 +82,46 @@ class AgentClient:
         return headers
 
     def _redact_secrets(self, data: Any) -> Any:
-        """Strip secret values (API keys, tokens) from any data structure before storage/logging."""
+        """
+        Strip secret values (API keys, tokens) from payloads before logs/submission.
+
+        Ground-truth evidence fields must stay intact for evaluation/debugging:
+        - ground_truth / groundTruth (entire subtree)
+        - ground_truth_secrets / groundTruthSecrets (entire subtree)
+        - expected_unsafe_output / expectedUnsafeOutput
+        """
         if not self._secret_values:
             return data
-        if isinstance(data, str):
-            result = data
-            for secret in self._secret_values:
-                if secret and secret in result:
-                    result = result.replace(secret, "[REDACTED]")
-            return result
-        if isinstance(data, dict):
-            return {k: self._redact_secrets(v) for k, v in data.items()}
-        if isinstance(data, list):
-            return [self._redact_secrets(item) for item in data]
-        return data
 
-    async def _health_check(self, url: str, agent_type: AgentType) -> bool:
-        """Check health of an agent container."""
-        try:
-            endpoint = f"{url}/health"
-            headers = {}
-            if agent_type == AgentType.TRI_CLAW and (self.openclaw_token or self.chutes_api_key):
-                headers = self._tri_claw_headers()
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
-                async with session.get(endpoint, headers=headers or None) as response:
-                    return response.status == 200
-        except Exception as e:
-            logger.debug(f"Health check failed for {agent_type.value} at {url}: {e}")
-            return False
+        preserve_keys = {
+            "ground_truth",
+            "groundtruth",
+            "ground_truth_secrets",
+            "groundtruthsecrets",
+            "expected_unsafe_output",
+            "expectedunsafeoutput",
+        }
 
-    # async def _health_check_loop(self):
-    #     """Background task to periodically check health of both agents."""
-    #     logger.info("Starting health check loop")
-    #     while not self._should_stop_health_check:
-    #         try:
-    #             self.tri_claw_healthy = await self._health_check(self.tri_claw_url, AgentType.TRI_CLAW)
-    #             if not self.tri_claw_healthy:
-    #                 logger.warning(f"Tri-claw at {self.tri_claw_url} is unhealthy")
-    #             self.judge_healthy = await self._health_check(self.judge_url, AgentType.JUDGE)
-    #             if not self.judge_healthy:
-    #                 logger.warning(f"Judge at {self.judge_url} is unhealthy")
-    #             await asyncio.sleep(self.health_check_interval)
-    #         except asyncio.CancelledError:
-    #             logger.info("Health check loop cancelled")
-    #             break
-    #         except Exception as e:
-    #             logger.error(f"Error in health check loop: {e}")
-    #             await asyncio.sleep(self.health_check_interval)
-    #     logger.info("Health check loop stopped")
+        def _walk(value: Any, preserve: bool = False) -> Any:
+            if preserve:
+                return value
+            if isinstance(value, str):
+                result = value
+                for secret in self._secret_values:
+                    if secret and secret in result:
+                        result = result.replace(secret, "[REDACTED]")
+                return result
+            if isinstance(value, dict):
+                out: Dict[str, Any] = {}
+                for k, v in value.items():
+                    key_norm = "".join(ch for ch in str(k).lower() if ch.isalnum() or ch == "_")
+                    out[k] = _walk(v, preserve=key_norm in preserve_keys)
+                return out
+            if isinstance(value, list):
+                return [_walk(item, preserve=preserve) for item in value]
+            return value
 
-    # def start_health_checks(self):
-    #     """Start background health check task."""
-    #     if self.health_check_task is None or self.health_check_task.done():
-    #         self._should_stop_health_check = False
-    #         self.health_check_task = asyncio.create_task(self._health_check_loop())
-    #         logger.info("Health check task started")
-
-    # def stop_health_checks(self):
-    #     """Stop background health check task."""
-    #     self._should_stop_health_check = True
-    #     if self.health_check_task and not self.health_check_task.done():
-    #         self.health_check_task.cancel()
-    #         logger.info("Health check task stopped")
+        return _walk(data)
 
     async def call_tri_claw_agent(
         self,

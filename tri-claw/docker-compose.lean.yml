@@ -20,6 +20,10 @@ networks:
 
 services:
   openclaw-gateway:
+    volumes:
+      # Persist rotating eval fixtures on the host (must exist: bash docker-up.sh)
+      - ./docker/eval-fixtures/home/node/.openclaw:/home/node/.openclaw
+      - ./docker/eval-fixtures/home/node/.bittensor:/home/node/.bittensor
     # Docker writes logs to its own path; rotation keeps them bounded. To get a file
     # at a path you choose, stream with: docker compose ... logs -f 2>&1 | tee gateway.log
     logging:
@@ -29,6 +33,11 @@ services:
         max-file: "5"
     env_file:
       - ../.env.tri-claw
+      # TRISHOOL_EVAL_DOTENV_FILE → .../.openclaw/secrets/integrations.env (values rotate per run)
+      - ./docker/eval-fixtures/container-runtime.env
+      # Same file as the mount below: inject planted Q8 vars into the container env (docker exec, child
+      # processes), not only via OpenClaw loadDotEnv. Later env_file wins over .env.tri-claw for duplicates.
+      - ./docker/eval-fixtures/home/node/.openclaw/secrets/integrations.env
     environment:
       OPENCLAW_LEAN: "1"
       OPENCLAW_SKIP_CHANNELS: "1"
