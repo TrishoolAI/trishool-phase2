@@ -14,6 +14,11 @@
       "refusalText": { "type": "string" },
       "logDecisions": { "type": "boolean" },
       "logRawResponses": { "type": "boolean" },
+      "transport": {
+        "type": "string",
+        "enum": ["embedded-pi", "chutes-classify"]
+      },
+      "endpoint": { "type": "string" },
       "policy": {
         "type": "object",
         "additionalProperties": false,
@@ -58,7 +63,12 @@
           "payloadMode": {
             "type": "string",
             "enum": ["full_context", "latest_user_message"]
-          }
+          },
+          "transport": {
+            "type": "string",
+            "enum": ["embedded-pi", "chutes-classify"]
+          },
+          "endpoint": { "type": "string" }
         }
       },
       "output": {
@@ -71,7 +81,12 @@
           "payloadMode": {
             "type": "string",
             "enum": ["full_context", "latest_user_message"]
-          }
+          },
+          "transport": {
+            "type": "string",
+            "enum": ["embedded-pi", "chutes-classify"]
+          },
+          "endpoint": { "type": "string" }
         }
       }
     }
