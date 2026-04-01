@@ -10,8 +10,10 @@ import {
   type OpenClawConfig,
   type OpenClawPluginApi,
 } from "openclaw/plugin-sdk";
+import { getCustomProviderApiKey, resolveEnvApiKey } from "../../src/agents/model-auth.js";
 import { extractAssistantText } from "../../src/agents/tools/sessions-helpers.js";
 import { resolveModelTarget } from "../../src/commands/models/shared.js";
+import { extractTextFromChatContent } from "../../src/shared/chat-content.js";
 import { safeJsonStringify } from "../../src/utils/safe-json.js";
 
 const GUARD_PLUGIN_ID = "guard-model";
@@ -22,11 +24,14 @@ const DEFAULT_REFUSAL_TEXT = "Blocked by guard model: probable prompt injection 
 
 type RunEmbeddedPiAgentFn = (params: Record<string, unknown>) => Promise<unknown>;
 
+type GuardQueryMode = "payload_json" | "text_extract";
+
 type GuardScopeConfig = {
   enabled?: boolean;
   model?: string;
   authProfileId?: string;
   payloadMode?: "full_context" | "latest_user_message";
+  queryMode?: GuardQueryMode;
 };
 
 type GuardPolicyConfig = {
@@ -41,6 +46,12 @@ type GuardPolicyConfig = {
 
 type GuardPluginConfig = {
   enabled?: boolean;
+  /** Default `embedded`: Pi embedded agent + chat completions. `chutes_classify`: HTTP POST classify API (e.g. Halo). */
+  transport?: "embedded" | "chutes_classify";
+  classifyUrl?: string;
+  classifyModel?: string;
+  /** Default query shaping for both phases; per-phase `input.queryMode` / `output.queryMode` overrides. */
+  queryMode?: GuardQueryMode;
   model?: string;
   authProfileId?: string;
   timeoutMs?: number;
@@ -240,8 +251,19 @@ function normalizeGuardConfig(value: unknown): GuardPluginConfig {
   }
   const input = isRecord(value.input) ? value.input : undefined;
   const output = isRecord(value.output) ? value.output : undefined;
+  const queryModeFrom = (raw: unknown): GuardQueryMode | undefined =>
+    raw === "payload_json" || raw === "text_extract" ? raw : undefined;
   return {
     enabled: typeof value.enabled === "boolean" ? value.enabled : undefined,
+    transport:
+      value.transport === "embedded" || value.transport === "chutes_classify"
+        ? value.transport
+        : undefined,
+    classifyUrl:
+      typeof value.classifyUrl === "string" ? value.classifyUrl.trim() || undefined : undefined,
+    classifyModel:
+      typeof value.classifyModel === "string" ? value.classifyModel.trim() || undefined : undefined,
+    queryMode: queryModeFrom(value.queryMode),
     model: typeof value.model === "string" ? value.model.trim() || undefined : undefined,
     authProfileId:
       typeof value.authProfileId === "string" ? value.authProfileId.trim() || undefined : undefined,
@@ -263,6 +285,7 @@ function normalizeGuardConfig(value: unknown): GuardPluginConfig {
             input.payloadMode === "full_context" || input.payloadMode === "latest_user_message"
               ? input.payloadMode
               : undefined,
+          queryMode: queryModeFrom(input.queryMode),
         }
       : undefined,
     output: output
@@ -277,6 +300,7 @@ function normalizeGuardConfig(value: unknown): GuardPluginConfig {
             output.payloadMode === "full_context" || output.payloadMode === "latest_user_message"
               ? output.payloadMode
               : undefined,
+          queryMode: queryModeFrom(output.queryMode),
         }
       : undefined,
     policy: normalizeGuardPolicyConfig(value.policy),
@@ -303,6 +327,7 @@ function resolveScopeConfig(
   model?: string;
   authProfileId?: string;
   payloadMode?: "full_context" | "latest_user_message";
+  queryMode?: GuardQueryMode;
 } {
   const scope = phase === "input" ? cfg.input : cfg.output;
   return {
@@ -310,7 +335,171 @@ function resolveScopeConfig(
     model: scope?.model ?? cfg.model,
     authProfileId: scope?.authProfileId ?? cfg.authProfileId,
     payloadMode: scope?.payloadMode ?? "full_context",
+    queryMode: scope?.queryMode ?? cfg.queryMode,
   };
+}
+
+function isChutesClassifyConfigured(cfg: GuardPluginConfig): boolean {
+  return (
+    cfg.transport === "chutes_classify" &&
+    Boolean(cfg.classifyUrl?.trim()) &&
+    Boolean(cfg.classifyModel?.trim())
+  );
+}
+
+/** True when this phase should invoke a guard check (embedded needs a model ref; classify needs URL + classify model). */
+function guardPhaseShouldRun(cfg: GuardPluginConfig, phase: "input" | "output"): boolean {
+  const scope = resolveScopeConfig(cfg, phase);
+  if (!scope.enabled) {
+    return false;
+  }
+  if (isChutesClassifyConfigured(cfg)) {
+    return true;
+  }
+  return Boolean(scope.model?.trim());
+}
+
+function resolveEffectiveQueryMode(cfg: GuardPluginConfig, phase: "input" | "output"): GuardQueryMode {
+  const q = resolveScopeConfig(cfg, phase).queryMode;
+  return q === "text_extract" ? "text_extract" : "payload_json";
+}
+
+function plainTextFromUserLikeMessage(message: unknown): string {
+  if (!isRecord(message)) {
+    return "";
+  }
+  const content = message.content;
+  if (typeof content === "string") {
+    return content.trim();
+  }
+  return (
+    extractTextFromChatContent(content, {
+      joinWith: "",
+      normalizeText: (text) => text.trim(),
+    }) ?? ""
+  );
+}
+
+function buildClassifyQueryString(params: {
+  phase: "input" | "output";
+  payload: unknown;
+  queryMode: GuardQueryMode;
+  maxChars: number;
+}): string {
+  if (params.queryMode === "payload_json") {
+    const raw = safeJsonStringify(params.payload) ?? JSON.stringify(params.payload);
+    return truncateForGuard(raw, params.maxChars);
+  }
+  if (params.phase === "output" && isRecord(params.payload)) {
+    const text =
+      typeof params.payload.assistantText === "string" ? params.payload.assistantText.trim() : "";
+    if (text) {
+      return truncateForGuard(text, params.maxChars);
+    }
+  }
+  if (params.phase === "input" && isRecord(params.payload)) {
+    const latest = params.payload.latestUserMessage;
+    const extracted = plainTextFromUserLikeMessage(latest);
+    if (extracted) {
+      return truncateForGuard(extracted, params.maxChars);
+    }
+    const ctx = params.payload.context;
+    if (isRecord(ctx)) {
+      const messages = Array.isArray(ctx.messages) ? ctx.messages : [];
+      const lastUser = [...messages]
+        .reverse()
+        .find((m) => isRecord(m) && m.role === "user");
+      const fromCtx = plainTextFromUserLikeMessage(lastUser);
+      if (fromCtx) {
+        return truncateForGuard(fromCtx, params.maxChars);
+      }
+    }
+  }
+  const fallback = safeJsonStringify(params.payload) ?? JSON.stringify(params.payload);
+  return truncateForGuard(fallback, params.maxChars);
+}
+
+/** Map Halo-style /v1/classify JSON body to allow/block (status-driven). */
+function parseChutesClassifyResponse(json: unknown): GuardDecision {
+  if (!isRecord(json)) {
+    throw new Error("classify response is not a JSON object");
+  }
+  const statusRaw = typeof json.status === "string" ? json.status.trim().toUpperCase() : "";
+  const category = typeof json.category === "string" ? json.category.trim() : "";
+  const attackOverlay =
+    typeof json.attack_overlay === "string" ? json.attack_overlay.trim() : "";
+  const reasonParts = [category, attackOverlay].filter(Boolean);
+  const reason = reasonParts.length > 0 ? reasonParts.join("; ") : undefined;
+  if (statusRaw === "HARMFUL") {
+    return { decision: "block", reason };
+  }
+  if (statusRaw === "HARMLESS") {
+    return { decision: "allow", reason: category || reason };
+  }
+  throw new Error(`classify response missing or unknown status: ${statusRaw || "(empty)"}`);
+}
+
+async function resolveChutesApiKeyForGuard(
+  openClawConfig: OpenClawConfig | undefined,
+): Promise<string> {
+  const fromConfig = getCustomProviderApiKey(openClawConfig, "chutes");
+  if (fromConfig) return fromConfig;
+  const fromEnv = resolveEnvApiKey("chutes");
+  if (fromEnv?.apiKey) return fromEnv.apiKey;
+  throw new Error(
+    "no Chutes API key available (checked per-request X-Chutes-Api-Key, config providers.chutes.apiKey, CHUTES_API_KEY, CHUTES_OAUTH_TOKEN)",
+  );
+}
+
+async function runChutesClassifyGuardCheck(params: {
+  api: OpenClawPluginApi;
+  openClawConfig?: OpenClawConfig;
+  cfg: GuardPluginConfig;
+  phase: "input" | "output";
+  provider: string;
+  model: string;
+  payload: unknown;
+}): Promise<GuardDecision> {
+  const url = params.cfg.classifyUrl?.trim();
+  const classifyModel = params.cfg.classifyModel?.trim();
+  if (!url || !classifyModel) {
+    throw new Error("chutes_classify requires classifyUrl and classifyModel");
+  }
+  const apiKey = await resolveChutesApiKeyForGuard(params.openClawConfig);
+  const maxChars = Math.max(1024, Math.trunc(params.cfg.maxPayloadChars ?? DEFAULT_MAX_PAYLOAD_CHARS));
+  const queryMode = resolveEffectiveQueryMode(params.cfg, params.phase);
+  const query = buildClassifyQueryString({
+    phase: params.phase,
+    payload: params.payload,
+    queryMode,
+    maxChars,
+  });
+  const timeoutMs = Math.max(1_000, Math.trunc(params.cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS));
+  const body = JSON.stringify({
+    model: classifyModel,
+    query,
+    role: params.phase === "input" ? "input" : "output",
+  });
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`classify HTTP ${res.status}: ${text.slice(0, 240)}`);
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text) as unknown;
+  } catch {
+    throw new Error(`classify response is not JSON: ${text.slice(0, 120)}`);
+  }
+  return parseChutesClassifyResponse(parsed);
 }
 
 function buildInputGuardPayload(
@@ -403,8 +592,31 @@ async function runGuardCheck(params: {
   const liveConfig =
     params.openClawConfig ?? (params.api.runtime.config.loadConfigFresh() as OpenClawConfig);
   const cfg = loadLiveGuardConfig(params.api, liveConfig);
+  if (!guardPhaseShouldRun(cfg, params.phase)) {
+    return { decision: "allow" };
+  }
+  if (isChutesClassifyConfigured(cfg)) {
+    const decision = await runChutesClassifyGuardCheck({
+      api: params.api,
+      openClawConfig: liveConfig,
+      cfg,
+      phase: params.phase,
+      provider: params.provider,
+      model: params.model,
+      payload: params.payload,
+    });
+    if (cfg.logDecisions) {
+      const rawSuffix = cfg.logRawResponses
+        ? ` raw_status=${decision.decision === "block" ? "block" : "allow"}`
+        : "";
+      params.api.logger.info(
+        `[guard-model] ${params.phase} classify decision for ${params.provider}/${params.model}: ${decision.decision}${decision.reason ? ` reason=${decision.reason}` : ""}${rawSuffix}`,
+      );
+    }
+    return decision;
+  }
   const scope = resolveScopeConfig(cfg, params.phase);
-  if (!scope.enabled || !scope.model) {
+  if (!scope.model) {
     return { decision: "allow" };
   }
   const resolvedGuardRef = resolveModelTarget({ raw: scope.model, cfg: liveConfig });
@@ -541,6 +753,11 @@ export const __testing = {
   parseGuardDecisionText,
   parseSafetyLabelResult,
   applySafetyLabelPolicy,
+  parseChutesClassifyResponse,
+  guardPhaseShouldRun,
+  buildClassifyQueryString,
+  isChutesClassifyConfigured,
+  resolveChutesApiKeyForGuard,
 };
 
 export default function register(api: OpenClawPluginApi) {
@@ -562,7 +779,7 @@ export default function register(api: OpenClawPluginApi) {
 
       const run = async () => {
         try {
-          if (inputScope.enabled && inputScope.model) {
+          if (guardPhaseShouldRun(liveCfg, "input")) {
             const inputDecision = await runGuardCheckSafe({
               api,
               openClawConfig: mergedOpenClawConfig,
@@ -584,7 +801,7 @@ export default function register(api: OpenClawPluginApi) {
             throw new Error("guard wrapper expected async iterable provider stream");
           }
 
-          if (!outputScope.enabled || !outputScope.model) {
+          if (!guardPhaseShouldRun(liveCfg, "output")) {
             for await (const item of inner) {
               stream.push(item as AssistantMessageEvent);
             }

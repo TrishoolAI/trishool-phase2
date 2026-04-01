@@ -19,6 +19,7 @@ describe("guard-model helpers", () => {
       model: "chutes/input",
       authProfileId: "input",
       payloadMode: "full_context",
+      queryMode: undefined,
     });
   });
 
@@ -95,6 +96,88 @@ describe("guard-model helpers", () => {
       systemPrompt: "system",
       latestUserMessage: { role: "user", content: "latest" },
     });
+  });
+
+  it("parses Chutes /v1/classify (Halo) JSON by status", () => {
+    expect(
+      __testing.parseChutesClassifyResponse({
+        status: "HARMFUL",
+        safety_label: "Unsafe",
+        category: "credential_or_secret_access",
+        attack_overlay: "jailbreak",
+      }),
+    ).toEqual({
+      decision: "block",
+      reason: "credential_or_secret_access; jailbreak",
+    });
+    expect(
+      __testing.parseChutesClassifyResponse({
+        status: "HARMLESS",
+        safety_label: "Safe",
+        category: "none",
+        attack_overlay: "none",
+      }),
+    ).toEqual({
+      decision: "allow",
+      reason: "none",
+    });
+  });
+
+  it("guardPhaseShouldRun uses classify URL when transport is chutes_classify", () => {
+    const classifyCfg = {
+      enabled: true,
+      transport: "chutes_classify" as const,
+      classifyUrl: "https://example.com/v1/classify",
+      classifyModel: "halo-guard",
+      input: { enabled: true },
+      output: { enabled: false },
+    };
+    expect(__testing.guardPhaseShouldRun(classifyCfg, "input")).toBe(true);
+    expect(__testing.guardPhaseShouldRun(classifyCfg, "output")).toBe(false);
+    expect(__testing.isChutesClassifyConfigured(classifyCfg)).toBe(true);
+    expect(
+      __testing.guardPhaseShouldRun(
+        { enabled: true, transport: "chutes_classify", input: { enabled: true } },
+        "input",
+      ),
+    ).toBe(false);
+  });
+
+  it("buildClassifyQueryString text_extract uses assistantText for output", () => {
+    expect(
+      __testing.buildClassifyQueryString({
+        phase: "output",
+        payload: { assistantText: "hello world" },
+        queryMode: "text_extract",
+        maxChars: 1000,
+      }),
+    ).toBe("hello world");
+  });
+
+  it("buildClassifyQueryString text_extract uses latest user text for input", () => {
+    expect(
+      __testing.buildClassifyQueryString({
+        phase: "input",
+        payload: {
+          latestUserMessage: {
+            role: "user",
+            content: [{ type: "text", text: "what is 2+2" }],
+          },
+        },
+        queryMode: "text_extract",
+        maxChars: 1000,
+      }),
+    ).toBe("what is 2+2");
+  });
+
+  it("resolveChutesApiKeyForGuard prefers config apiKey over env", async () => {
+    const configWithKey = {
+      models: { providers: { chutes: { apiKey: "cfg-key-123" } } },
+    } as any;
+    await expect(__testing.resolveChutesApiKeyForGuard(configWithKey)).resolves.toBe("cfg-key-123");
+    await expect(__testing.resolveChutesApiKeyForGuard(undefined)).rejects.toThrow(
+      /no Chutes API key available/,
+    );
   });
 
   it("lets policy override safety-label defaults", () => {
