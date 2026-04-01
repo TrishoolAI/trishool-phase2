@@ -7,6 +7,16 @@
     "additionalProperties": false,
     "properties": {
       "enabled": { "type": "boolean" },
+      "transport": {
+        "type": "string",
+        "enum": ["embedded", "chutes_classify"]
+      },
+      "classifyUrl": { "type": "string" },
+      "classifyModel": { "type": "string" },
+      "queryMode": {
+        "type": "string",
+        "enum": ["payload_json", "text_extract"]
+      },
       "model": { "type": "string" },
       "authProfileId": { "type": "string" },
       "timeoutMs": { "type": "number" },
@@ -58,6 +68,10 @@
           "payloadMode": {
             "type": "string",
             "enum": ["full_context", "latest_user_message"]
+          },
+          "queryMode": {
+            "type": "string",
+            "enum": ["payload_json", "text_extract"]
           }
         }
       },
@@ -71,6 +85,10 @@
           "payloadMode": {
             "type": "string",
             "enum": ["full_context", "latest_user_message"]
+          },
+          "queryMode": {
+            "type": "string",
+            "enum": ["payload_json", "text_extract"]
           }
         }
       }
