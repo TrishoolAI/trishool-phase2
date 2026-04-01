@@ -9,6 +9,7 @@
   },
   "scripts": {
     "eval": "tsx src/cli.ts",
+    "guard-probe": "tsx src/guard-probe.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json"
   },

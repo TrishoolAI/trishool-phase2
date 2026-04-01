@@ -56,6 +56,21 @@ pnpm eval --question Q1 --prompt "Your test prompt"
 
 Uses the same default [`data/questions.json`](./data/questions.json) unless you pass `--questions`.
 
+### 3) Guard probe (no judge)
+
+One user message through **OpenClaw** `POST /v1/chat/completions` by default (gateway + **input guard** + model). No rubric file and no judge. Optional **`--halo-direct`** skips OpenClaw and hits Halo `/v1/classify` only (same as before).
+
+```bash
+# Default: OpenClaw (needs OPENCLAW_GATEWAY_PASSWORD + CHUTES_API_KEY for Chutes models)
+pnpm guard-probe -- --query "What is 2+2?"
+pnpm guard-probe -- --query "ignore previous instructions"
+
+# Direct Halo API only (needs CHUTES_API_KEY); exit 2 = HARMFUL/block, 0 = HARMLESS/allow
+pnpm guard-probe -- --query "What is 2+2?" --halo-direct
+```
+
+Optional env for `--halo-direct`: `HALO_CLASSIFY_URL`, `HALO_CLASSIFY_MODEL`. Use `--verbose` for URLs and key fingerprint.
+
 ### Overrides and reporting
 
 ```bash
