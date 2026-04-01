@@ -18,7 +18,9 @@
       }
     },
     "tools": {
-      "allow": ["sessions_send"]
+      "allow": [
+        "sessions_send"
+      ]
     },
     "tailscale": {
       "mode": "off"
@@ -35,9 +37,15 @@
         ]
       },
       "models": {
-        "chutes-default": { "alias": "chutes/Qwen/Qwen3-32B-TEE" },
-        "chutes-235b": { "alias": "chutes/Qwen/Qwen3-235B-A22B-Instruct-2507-TEE" },
-        "chutes-fast": { "alias": "chutes/Qwen/Qwen3.5-397B-A17B-TEE" }
+        "chutes-default": {
+          "alias": "chutes/Qwen/Qwen3-32B-TEE"
+        },
+        "chutes-235b": {
+          "alias": "chutes/Qwen/Qwen3-235B-A22B-Instruct-2507-TEE"
+        },
+        "chutes-fast": {
+          "alias": "chutes/Qwen/Qwen3.5-397B-A17B-TEE"
+        }
       }
     }
   },
@@ -45,7 +53,10 @@
     "dmScope": "per-channel-peer"
   },
   "plugins": {
-    "allow": ["memory-core", "guard-model"],
+    "allow": [
+      "memory-core",
+      "guard-model"
+    ],
     "slots": {
       "memory": "memory-core"
     },
@@ -53,17 +64,33 @@
       "guard-model": {
         "enabled": false,
         "config": {
-          "enabled": false,
-          "model": "chutes/Qwen/Qwen3Guard-Gen-0.6B",
+          "enabled": true,
+          "transport": "chutes-classify",
+          "endpoint": "https://astroboi-halo-guard.chutes.ai/v1/classify",
+          "model": "halo-guard",
           "logDecisions": true,
           "policy": {
             "parseMode": "json_or_safety_label",
             "evaluationFailureAction": "allow",
             "unknownSafetyLabelAction": "allow",
-            "allowLabels": ["safe", "controversial"],
-            "blockLabels": ["unsafe"],
-            "allowReasons": ["none", "politically sensitive topics", "copyright violation"],
-            "blockReasons": ["violent", "non-violent illegal acts", "pii", "jailbreak"]
+            "allowLabels": [
+              "safe",
+              "controversial"
+            ],
+            "blockLabels": [
+              "unsafe"
+            ],
+            "allowReasons": [
+              "none",
+              "politically sensitive topics",
+              "copyright violation"
+            ],
+            "blockReasons": [
+              "violent",
+              "non-violent illegal acts",
+              "pii",
+              "jailbreak"
+            ]
           },
           "input": {
             "enabled": true,
@@ -88,8 +115,15 @@
             "id": "Qwen/Qwen3.5-397B-A17B-TEE",
             "name": "Chutes Qwen3.5-397B-A17B-TEE",
             "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 256000,
             "maxTokens": 16384
           },
@@ -97,8 +131,15 @@
             "id": "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE",
             "name": "Chutes Qwen3-235B-A22B-Instruct-2507-TEE",
             "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 256000,
             "maxTokens": 16384
           },
@@ -106,8 +147,15 @@
             "id": "Qwen/Qwen3-32B-TEE",
             "name": "Chutes Qwen3-32B-TEE",
             "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 128000,
             "maxTokens": 16384
           },
@@ -115,8 +163,15 @@
             "id": "openai/gpt-oss-20b-TEE",
             "name": "Chutes openai/gpt-oss-20b-TEE",
             "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 128000,
             "maxTokens": 16384
           },
@@ -124,8 +179,15 @@
             "id": "chutesai/Mistral-Small-3.1-24B-Instruct-2503-TEE",
             "name": "Chutes Mistral-Small-3.1-24B-Instruct-2503-TEE",
             "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 128000,
             "maxTokens": 16384
           },
@@ -133,8 +195,15 @@
             "id": "unsloth/gemma-3-27b-it",
             "name": "Chutes Gemma-3-27b-it",
             "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 128000,
             "maxTokens": 16384
           },
@@ -142,8 +211,15 @@
             "id": "Qwen/Qwen3Guard-Gen-0.6B",
             "name": "Chutes Qwen3Guard-Gen-0.6B",
             "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 128000,
             "maxTokens": 16384
           }
@@ -155,8 +231,12 @@
     "internal": {
       "enabled": true,
       "entries": {
-        "boot-md": { "enabled": true },
-        "bootstrap-extra-files": { "enabled": true }
+        "boot-md": {
+          "enabled": true
+        },
+        "bootstrap-extra-files": {
+          "enabled": true
+        }
       }
     }
   }

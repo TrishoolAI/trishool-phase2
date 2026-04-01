@@ -10,6 +10,7 @@ import {
   type OpenClawConfig,
   type OpenClawPluginApi,
 } from "openclaw/plugin-sdk";
+import { resolveApiKeyForProvider } from "../../src/agents/model-auth.js";
 import { extractAssistantText } from "../../src/agents/tools/sessions-helpers.js";
 import { resolveModelTarget } from "../../src/commands/models/shared.js";
 import { safeJsonStringify } from "../../src/utils/safe-json.js";
@@ -22,11 +23,15 @@ const DEFAULT_REFUSAL_TEXT = "Blocked by guard model: probable prompt injection 
 
 type RunEmbeddedPiAgentFn = (params: Record<string, unknown>) => Promise<unknown>;
 
+type GuardTransport = "embedded-pi" | "chutes-classify";
+
 type GuardScopeConfig = {
   enabled?: boolean;
   model?: string;
   authProfileId?: string;
   payloadMode?: "full_context" | "latest_user_message";
+  transport?: GuardTransport;
+  endpoint?: string;
 };
 
 type GuardPolicyConfig = {
@@ -48,6 +53,8 @@ type GuardPluginConfig = {
   refusalText?: string;
   logDecisions?: boolean;
   logRawResponses?: boolean;
+  transport?: GuardTransport;
+  endpoint?: string;
   input?: GuardScopeConfig;
   output?: GuardScopeConfig;
   policy?: GuardPolicyConfig;
@@ -90,6 +97,14 @@ function normalizePolicyStringList(value: unknown): string[] | undefined {
     .map((entry) => normalizePolicyToken(entry))
     .filter(Boolean);
   return entries.length > 0 ? entries : [];
+}
+
+function normalizeOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value.trim() || undefined : undefined;
+}
+
+function normalizeGuardTransport(value: unknown): GuardTransport | undefined {
+  return value === "embedded-pi" || value === "chutes-classify" ? value : undefined;
 }
 
 function stripCodeFences(text: string): string {
@@ -244,39 +259,39 @@ function normalizeGuardConfig(value: unknown): GuardPluginConfig {
     enabled: typeof value.enabled === "boolean" ? value.enabled : undefined,
     model: typeof value.model === "string" ? value.model.trim() || undefined : undefined,
     authProfileId:
-      typeof value.authProfileId === "string" ? value.authProfileId.trim() || undefined : undefined,
+      normalizeOptionalString(value.authProfileId),
     timeoutMs: typeof value.timeoutMs === "number" ? value.timeoutMs : undefined,
     maxPayloadChars: typeof value.maxPayloadChars === "number" ? value.maxPayloadChars : undefined,
     refusalText:
       typeof value.refusalText === "string" ? value.refusalText.trim() || undefined : undefined,
     logDecisions: typeof value.logDecisions === "boolean" ? value.logDecisions : undefined,
     logRawResponses: typeof value.logRawResponses === "boolean" ? value.logRawResponses : undefined,
+    transport: normalizeGuardTransport(value.transport),
+    endpoint: normalizeOptionalString(value.endpoint),
     input: input
       ? {
           enabled: typeof input.enabled === "boolean" ? input.enabled : undefined,
-          model: typeof input.model === "string" ? input.model.trim() || undefined : undefined,
-          authProfileId:
-            typeof input.authProfileId === "string"
-              ? input.authProfileId.trim() || undefined
-              : undefined,
+          model: normalizeOptionalString(input.model),
+          authProfileId: normalizeOptionalString(input.authProfileId),
           payloadMode:
             input.payloadMode === "full_context" || input.payloadMode === "latest_user_message"
               ? input.payloadMode
               : undefined,
+          transport: normalizeGuardTransport(input.transport),
+          endpoint: normalizeOptionalString(input.endpoint),
         }
       : undefined,
     output: output
       ? {
           enabled: typeof output.enabled === "boolean" ? output.enabled : undefined,
-          model: typeof output.model === "string" ? output.model.trim() || undefined : undefined,
-          authProfileId:
-            typeof output.authProfileId === "string"
-              ? output.authProfileId.trim() || undefined
-              : undefined,
+          model: normalizeOptionalString(output.model),
+          authProfileId: normalizeOptionalString(output.authProfileId),
           payloadMode:
             output.payloadMode === "full_context" || output.payloadMode === "latest_user_message"
               ? output.payloadMode
               : undefined,
+          transport: normalizeGuardTransport(output.transport),
+          endpoint: normalizeOptionalString(output.endpoint),
         }
       : undefined,
     policy: normalizeGuardPolicyConfig(value.policy),
@@ -303,6 +318,8 @@ function resolveScopeConfig(
   model?: string;
   authProfileId?: string;
   payloadMode?: "full_context" | "latest_user_message";
+  transport: GuardTransport;
+  endpoint?: string;
 } {
   const scope = phase === "input" ? cfg.input : cfg.output;
   return {
@@ -310,6 +327,8 @@ function resolveScopeConfig(
     model: scope?.model ?? cfg.model,
     authProfileId: scope?.authProfileId ?? cfg.authProfileId,
     payloadMode: scope?.payloadMode ?? "full_context",
+    transport: scope?.transport ?? cfg.transport ?? "embedded-pi",
+    endpoint: scope?.endpoint ?? cfg.endpoint,
   };
 }
 
@@ -374,6 +393,62 @@ function buildGuardPrompt(params: {
   ].join("\n");
 }
 
+function normalizeClassifySafetyLabel(value: string): string {
+  const normalized = normalizePolicyToken(value);
+  if (normalized === "harmless") {
+    return "safe";
+  }
+  if (normalized === "harmful") {
+    return "unsafe";
+  }
+  return normalized;
+}
+
+function firstNonEmptyReason(payload: Record<string, unknown>): string | undefined {
+  let sawNone = false;
+  const candidates = [payload.attack_overlay, payload.attackOverlay, payload.category];
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") {
+      continue;
+    }
+    const normalized = normalizePolicyToken(candidate);
+    if (!normalized) {
+      continue;
+    }
+    if (normalized === "none") {
+      sawNone = true;
+      continue;
+    }
+    return normalized;
+  }
+  return sawNone ? "none" : undefined;
+}
+
+function parseChutesClassifyDecision(
+  payload: unknown,
+  policy: Required<GuardPolicyConfig> = DEFAULT_POLICY,
+): GuardDecision {
+  if (!isRecord(payload)) {
+    throw new Error("guard classify response was not an object");
+  }
+  const labelSource = [payload.safety_label, payload.safetyLabel, payload.tier, payload.status].find(
+    (value): value is string => typeof value === "string" && value.trim().length > 0,
+  );
+  if (labelSource) {
+    return applySafetyLabelPolicy(
+      {
+        label: normalizeClassifySafetyLabel(labelSource),
+        reason: firstNonEmptyReason(payload),
+      },
+      policy,
+    );
+  }
+  if (typeof payload.generated_text === "string" && payload.generated_text.trim().length > 0) {
+    return parseGuardDecisionText(payload.generated_text, policy);
+  }
+  throw new Error("guard classify response missing safety label");
+}
+
 async function loadRunEmbeddedPiAgent(): Promise<RunEmbeddedPiAgentFn> {
   try {
     const mod = await import("../../src/agents/pi-embedded-runner.js");
@@ -407,7 +482,6 @@ async function runGuardCheck(params: {
   if (!scope.enabled || !scope.model) {
     return { decision: "allow" };
   }
-  const resolvedGuardRef = resolveModelTarget({ raw: scope.model, cfg: liveConfig });
   const payloadJson = truncateForGuard(
     safeJsonStringify(params.payload) ?? JSON.stringify(params.payload),
     Math.max(1024, Math.trunc(cfg.maxPayloadChars ?? DEFAULT_MAX_PAYLOAD_CHARS)),
@@ -418,7 +492,59 @@ async function runGuardCheck(params: {
     model: params.model,
     payloadJson,
   });
+  const policy = normalizeGuardPolicyConfig(cfg.policy);
 
+  if (scope.transport === "chutes-classify") {
+    const endpoint = scope.endpoint;
+    if (!endpoint) {
+      throw new Error("guard transport chutes-classify requires endpoint");
+    }
+    const { apiKey } = await resolveApiKeyForProvider({
+      provider: "chutes",
+      cfg: liveConfig,
+      profileId: scope.authProfileId,
+    });
+    if (!apiKey) {
+      throw new Error("No API key resolved for guard transport chutes-classify");
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Math.max(1_000, Math.trunc(cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS)));
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: scope.model,
+          query: prompt,
+        }),
+        signal: controller.signal,
+      });
+      const responseText = await response.text();
+      if (!response.ok) {
+        throw new Error(
+          `guard classify HTTP ${response.status}: ${responseText.slice(0, 240).trim() || "(empty body)"}`,
+        );
+      }
+      const parsed = JSON.parse(responseText) as unknown;
+      const decision = parseChutesClassifyDecision(parsed, policy);
+      if (cfg.logDecisions) {
+        const rawSuffix = cfg.logRawResponses
+          ? ` raw=${JSON.stringify(responseText.slice(0, 240))}`
+          : "";
+        params.api.logger.info(
+          `[guard-model] ${params.phase} decision for ${params.provider}/${params.model}: ${decision.decision}${decision.reason ? ` reason=${decision.reason}` : ""}${rawSuffix}`,
+        );
+      }
+      return decision;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  const resolvedGuardRef = resolveModelTarget({ raw: scope.model, cfg: liveConfig });
   const tmpDir = await fs.mkdtemp(path.join(resolvePreferredOpenClawTmpDir(), "openclaw-guard-"));
   try {
     const sessionId = `${GUARD_SESSION_PREFIX}${params.phase}-${Date.now().toString(36)}`;
@@ -444,7 +570,7 @@ async function runGuardCheck(params: {
     if (!text) {
       throw new Error("guard model returned empty output");
     }
-    const decision = parseGuardDecisionText(text, normalizeGuardPolicyConfig(cfg.policy));
+    const decision = parseGuardDecisionText(text, policy);
     if (cfg.logDecisions) {
       const rawSuffix = cfg.logRawResponses ? ` raw=${JSON.stringify(text.slice(0, 240))}` : "";
       params.api.logger.info(
@@ -539,6 +665,7 @@ export const __testing = {
   buildBlockErrorMessage,
   truncateForGuard,
   parseGuardDecisionText,
+  parseChutesClassifyDecision,
   parseSafetyLabelResult,
   applySafetyLabelPolicy,
 };

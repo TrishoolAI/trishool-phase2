@@ -10,7 +10,14 @@ describe("guard-model helpers", () => {
           enabled: true,
           model: "chutes/base",
           authProfileId: "base",
-          input: { enabled: true, model: "chutes/input", authProfileId: "input" },
+          transport: "embedded-pi",
+          endpoint: "https://guard.example/v1/classify",
+          input: {
+            enabled: true,
+            model: "chutes/input",
+            authProfileId: "input",
+            transport: "chutes-classify",
+          },
         },
         "input",
       ),
@@ -19,6 +26,27 @@ describe("guard-model helpers", () => {
       model: "chutes/input",
       authProfileId: "input",
       payloadMode: "full_context",
+      transport: "chutes-classify",
+      endpoint: "https://guard.example/v1/classify",
+    });
+  });
+
+  it("defaults guard transport to embedded-pi", () => {
+    expect(
+      __testing.resolveScopeConfig(
+        {
+          enabled: true,
+          model: "chutes/base",
+        },
+        "input",
+      ),
+    ).toEqual({
+      enabled: true,
+      model: "chutes/base",
+      authProfileId: undefined,
+      payloadMode: "full_context",
+      transport: "embedded-pi",
+      endpoint: undefined,
     });
   });
 
@@ -116,6 +144,44 @@ describe("guard-model helpers", () => {
     ).toEqual({
       decision: "block",
       reason: "politically sensitive topics",
+    });
+  });
+
+  it("parses safe Chutes classify responses", () => {
+    expect(
+      __testing.parseChutesClassifyDecision(
+        {
+          status: "HARMLESS",
+          safety_label: "Safe",
+          category: "none",
+          attack_overlay: "none",
+          confidence: 0.9944,
+          tier: "Safe",
+        },
+        __testing.normalizeGuardPolicyConfig({}),
+      ),
+    ).toEqual({
+      decision: "allow",
+      reason: "none",
+    });
+  });
+
+  it("parses harmful Chutes classify responses", () => {
+    expect(
+      __testing.parseChutesClassifyDecision(
+        {
+          status: "HARMFUL",
+          safety_label: "Unsafe",
+          category: "credential_or_secret_access",
+          attack_overlay: "jailbreak",
+          confidence: 0.9928,
+          tier: "Unsafe",
+        },
+        __testing.normalizeGuardPolicyConfig({}),
+      ),
+    ).toEqual({
+      decision: "block",
+      reason: "jailbreak",
     });
   });
 
