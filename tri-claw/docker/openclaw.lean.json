@@ -51,10 +51,13 @@
     },
     "entries": {
       "guard-model": {
-        "enabled": false,
+        "enabled": true,
         "config": {
-          "enabled": false,
-          "model": "chutes/Qwen/Qwen3Guard-Gen-0.6B",
+          "enabled": true,
+          "transport": "chutes_classify",
+          "classifyUrl": "https://astroboi-halo-guard.chutes.ai/v1/classify",
+          "classifyModel": "halo-guard",
+          "queryMode": "text_extract",
           "logDecisions": true,
           "policy": {
             "parseMode": "json_or_safety_label",
@@ -67,10 +70,13 @@
           },
           "input": {
             "enabled": true,
-            "payloadMode": "latest_user_message"
+            "payloadMode": "latest_user_message",
+            "queryMode": "text_extract"
           },
           "output": {
-            "enabled": true
+            "enabled": true,
+            "payloadMode": "full_context",
+            "queryMode": "text_extract"
           },
           "refusalText": "Blocked by guard model."
         }
