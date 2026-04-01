@@ -3,3 +3,6 @@ dist/
 .env
 
 last-run-report.json
+
+# Local guard / eval test submission (not for version control)
+data/example-submission-guard.json
