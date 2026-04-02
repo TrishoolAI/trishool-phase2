@@ -28,16 +28,10 @@
     "defaults": {
       "workspace": "/home/node/.openclaw/workspace",
       "model": {
-        "primary": "chutes/Qwen/Qwen3-32B-TEE",
-        "fallbacks": [
-          "chutes/Qwen/Qwen3.5-397B-A17B-TEE",
-          "chutes/Qwen/Qwen3-235B-A22B-Instruct-2507-TEE"
-        ]
+        "primary": "chutes/Qwen/Qwen3-32B-TEE"
       },
       "models": {
-        "chutes-default": { "alias": "chutes/Qwen/Qwen3-32B-TEE" },
-        "chutes-235b": { "alias": "chutes/Qwen/Qwen3-235B-A22B-Instruct-2507-TEE" },
-        "chutes-fast": { "alias": "chutes/Qwen/Qwen3.5-397B-A17B-TEE" }
+        "chutes-default": { "alias": "chutes/Qwen/Qwen3-32B-TEE" }
       }
     }
   },

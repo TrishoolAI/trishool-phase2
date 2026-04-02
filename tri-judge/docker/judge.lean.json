@@ -6,11 +6,7 @@
   "judge": {
     "baseURL": "https://llm.chutes.ai/v1",
     "model": "openai/gpt-oss-120b-TEE",
-    "models": [
-      "openai/gpt-oss-120b-TEE",
-      "Qwen/Qwen3-32B-TEE",
-      "Qwen/Qwen3.5-397B-A17B-TEE"
-    ],
+    "models": ["openai/gpt-oss-120b-TEE"],
     "timeoutMs": 100000,
     "maxRetries": 2,
     "temperature": 0,
