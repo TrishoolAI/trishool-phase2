@@ -3,6 +3,9 @@
 Generate persisted eval fixtures for tri-claw (dynamic secret *values*, stable paths).
 Stdlib only. Reads tri-claw/docker/openclaw.lean.json; writes tri-claw/docker/eval-fixtures/.
 
+If fixtures already exist, a normal run (no --recreate) only rewrites eval-fixtures/.../openclaw.json
+from openclaw.lean.json and re-applies Q7 agent id / ownerAllowFrom from ground-truth.json — no secret rotation.
+
 Container layout is fixed (see tri-claw/Dockerfile.lean); only inner file contents rotate per run.
 
 Workspace bootstrap markdown is copied from tri-claw/docker/eval-fixtures-workspace-seed/; IDENTITY.md is
@@ -299,6 +302,63 @@ def _deep_merge(base: dict, patch: dict) -> dict:
     return base
 
 
+def _sync_openclaw_json_from_lean(
+    lean_path: Path,
+    ground_path: Path,
+    openclaw_dest: Path,
+) -> bool:
+    """
+    Refresh eval-fixtures openclaw.json from docker/openclaw.lean.json without rotating secrets.
+    Re-applies Q7 agent id and ownerAllowFrom phone from ground-truth.json.
+    """
+    if not ground_path.is_file():
+        print(
+            "eval-fixtures: ground-truth.json missing; cannot sync openclaw.json (run once without --recreate after a full generate, or use --recreate)"
+        )
+        return False
+    try:
+        ground = json.loads(ground_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        print(f"eval-fixtures: invalid ground-truth.json: {e}")
+        return False
+    q7 = ground.get("questions", {}).get("Q7", {})
+    secrets = q7.get("ground_truth_secrets") or []
+    if len(secrets) < 2:
+        print("eval-fixtures: Q7 ground_truth_secrets incomplete; cannot sync openclaw.json")
+        return False
+    agent_id, q7_phone = secrets[0], secrets[1]
+    if not lean_path.is_file():
+        print(f"eval-fixtures: missing lean config: {lean_path}")
+        return False
+    lean_cfg = json.loads(lean_path.read_text(encoding="utf-8"))
+    merged = copy.deepcopy(lean_cfg)
+    eval_name = "eval-agent"
+    if openclaw_dest.is_file():
+        try:
+            prev = json.loads(openclaw_dest.read_text(encoding="utf-8"))
+            prev_list = (prev.get("agents") or {}).get("list") if isinstance(prev.get("agents"), dict) else None
+            if isinstance(prev_list, list) and prev_list and isinstance(prev_list[0], dict):
+                eval_name = prev_list[0].get("name") or eval_name
+        except (json.JSONDecodeError, OSError):
+            pass
+    patch = {
+        "agents": {
+            "list": [{"id": agent_id, "default": True, "name": eval_name}],
+        },
+        "commands": {
+            "ownerAllowFrom": [q7_phone],
+        },
+    }
+    _deep_merge(merged, patch)
+    openclaw_dest.parent.mkdir(parents=True, exist_ok=True)
+    openclaw_dest.write_text(json.dumps(merged, indent=2), encoding="utf-8")
+    print(
+        f"eval-fixtures: synced openclaw.json from {lean_path.name} "
+        f"(Q7 agent id / ownerAllowFrom from ground-truth.json; planted secrets unchanged)"
+    )
+    return True
+
+
 def _emit_infra_yaml(
     database_url: str,
     redis_url: str,
@@ -333,9 +393,12 @@ def main() -> None:
     ground_path = out_root / "ground-truth.json"
     manifest_path = out_root / "manifest.json"
     stage_home = out_root / "home" / "node"
+    openclaw_fixture = stage_home / ".openclaw" / "openclaw.json"
 
     if marker.exists() and not args.recreate:
-        print(f"eval-fixtures: exists ({marker}), skip (pass --recreate to rotate)")
+        if _sync_openclaw_json_from_lean(lean_path, ground_path, openclaw_fixture):
+            return
+        print(f"eval-fixtures: exists ({marker}), skip (pass --recreate to rotate secrets)")
         return
 
     if args.recreate and out_root.exists():

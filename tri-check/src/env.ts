@@ -42,6 +42,15 @@ export function resolveServiceUrls(overrides?: {
   };
 }
 
+
+export function fixtureRedactForDisplayEnabled(): boolean {
+  return process.env.TRI_CHECK_REDACT_FIXTURE_OUTPUT === "1";
+}
+
+export function fixtureSecretsToRedactInDisplay(fixtureRedact: string[]): string[] {
+  return fixtureRedactForDisplayEnabled() ? fixtureRedact : [];
+}
+
 export function formatChutesKeyForLog(key: string): string {
   const k = (key || "").trim();
   if (!k) return "(empty — header omitted)";
