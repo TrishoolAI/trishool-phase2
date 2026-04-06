@@ -152,7 +152,7 @@ Lean OpenClaw eval uses **rotating secret values** with fixed paths: **`~/.openc
 - **Generator**: [scripts/generate_trishool_eval_fixtures.py](scripts/generate_trishool_eval_fixtures.py) runs automatically when you start lean tri-claw via [docker-up.sh](docker-up.sh) or [tri-claw/docker-setup.sh](tri-claw/docker-setup.sh) (unless `TRISHOOL_SKIP_EVAL_FIXTURES=1`).
 - **Output** (gitignored): `tri-claw/docker/eval-fixtures/` mirrors that layout: `config/operator.env`, `infra/infrastructure.yaml`, `secrets/integrations.env` (what **`TRISHOOL_EVAL_DOTENV_FILE`** loads). **Q10** files: `wallets/default/hotkeys/default` and `wallets/default/hotkeys/recovery.json` under **`home/node/.bittensor`**. There is **no** root `~/.openclaw/.env`; **`ground-truth.json`** lists `fixture_layout.paths_relative_to_openclaw` and `paths_relative_to_bittensor`. Also bundled: `manifest.json`.
 - **First run** creates fixtures; **later runs** reuse them so the validator and container stay in sync.
-- **Rotate secret values** (same paths): `bash docker-up.sh --recreate --build` (or export `TRISHOOL_EVAL_RECREATE=1` before `tri-claw/docker-setup.sh --lean --build`).
+- **Rotate secret values** (same paths): `bash docker-up.sh --recreate` (or export `TRISHOOL_EVAL_RECREATE=1` before `tri-claw/docker-setup.sh --lean`).
 - **Validator**: merge overlay for the judge — set `TRISHOOL_EVAL_GROUND_TRUTH` to a JSON file path, or default to `tri-claw/docker/eval-fixtures/ground-truth.json` next to the repo. The validator applies `ground_truth_secrets` and `expected_unsafe_output` from that file per `question_id` when calling the judge, so scores match what is actually baked into tri-claw.
 
 Your **validator's own** Bittensor wallet lives on the host (e.g. `~/.bittensor/wallets/<your_coldkey>/`) and is referenced only by `validator.config.js` args; it is never mounted into the tri-claw container.
@@ -161,17 +161,13 @@ Your **validator's own** Bittensor wallet lives on the host (e.g. `~/.bittensor/
 
 ## Running
 
-### Start the Docker agents (first time — builds image from source)
-
-```bash
-bash docker-up.sh --build
-```
-
-Subsequent starts (image already built):
+### Start the Docker agents (builds both images every run)
 
 ```bash
 bash docker-up.sh
 ```
+
+Use `bash docker-up.sh --no-cache` for a full rebuild without Docker layer cache.
 
 This brings up:
 - `tri-claw-openclaw-gateway-1` on port **18789**
@@ -185,16 +181,18 @@ Wait ~60 seconds for both services to be fully ready before running anything aga
 bash docker-down.sh
 ```
 
-### Rebuild the image (after source changes)
+### Rebuild after source changes
+
+Every `docker-up.sh` run builds tri-claw and tri-judge. For a slower uncached build:
 
 ```bash
-bash docker-up.sh --build
+bash docker-up.sh --no-cache
 ```
 
 ### Regenerate eval secrets and paths (optional)
 
 ```bash
-bash docker-up.sh --recreate --build
+bash docker-up.sh --recreate
 ```
 
 `--recreate` is **only** for trishool: it rotates `tri-claw/docker/eval-fixtures/` and is stripped before `docker compose` runs for tri-judge.

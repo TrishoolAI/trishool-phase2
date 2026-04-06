@@ -13,7 +13,7 @@ EXTRA_COMPOSE_FILE="$ROOT_DIR/docker-compose.extra.yml"
 IMAGE_NAME="${OPENCLAW_IMAGE:-openclaw:local}"
 DOCKERFILE="$ROOT_DIR/Dockerfile"
 LEAN_MODE=false
-FORCE_BUILD=false
+DOCKER_BUILD_NO_CACHE=false
 for arg in "$@"; do
   case "$arg" in
     --lean)
@@ -22,7 +22,9 @@ for arg in "$@"; do
       DOCKERFILE="$ROOT_DIR/Dockerfile.lean"
       ;;
     --build)
-      FORCE_BUILD=true
+      ;; # no-op: openclaw:local / openclaw:lean always build; kept for backward compatibility
+    --no-cache)
+      DOCKER_BUILD_NO_CACHE=true
       ;;
   esac
 done
@@ -309,26 +311,23 @@ done
 
 build_image() {
   echo "==> Building Docker image: $IMAGE_NAME"
+  local -a cache_args=()
+  if [[ "$DOCKER_BUILD_NO_CACHE" == "true" ]]; then
+    cache_args+=(--no-cache)
+    echo "    (docker build --no-cache)"
+  fi
   docker build \
+    "${cache_args[@]}" \
     --build-arg "OPENCLAW_DOCKER_APT_PACKAGES=${OPENCLAW_DOCKER_APT_PACKAGES}" \
     -t "$IMAGE_NAME" \
     -f "$DOCKERFILE" \
     "$ROOT_DIR"
 }
 
-image_exists() {
-  docker image inspect "$IMAGE_NAME" >/dev/null 2>&1
-}
-
+# Always build local tags so `openclaw:lean` / `openclaw:local` never silently reuse a stale image
+# (compose and validators depend on the tag pointing at the latest build from this tree).
 if [[ "$IMAGE_NAME" == "openclaw:local" || "$IMAGE_NAME" == "openclaw:lean" ]]; then
-  if [[ "$FORCE_BUILD" == "true" ]]; then
-    build_image
-  elif ! image_exists; then
-    echo "==> Image $IMAGE_NAME not found — building automatically (pass --build to force rebuild)"
-    build_image
-  else
-    echo "==> Image $IMAGE_NAME already exists — skipping build (pass --build to force rebuild)"
-  fi
+  build_image
 else
   echo "==> Pulling Docker image: $IMAGE_NAME"
   if ! docker pull "$IMAGE_NAME"; then
