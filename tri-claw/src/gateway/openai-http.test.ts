@@ -84,6 +84,41 @@ function parseSseDataLines(text: string): string[] {
 }
 
 describe("OpenAI-compatible HTTP API (e2e)", () => {
+  it("returns 502 when agent result includes isError payloads (no fake 200 assistant text)", async () => {
+    const port = enabledPort;
+    agentCommand.mockClear();
+    agentCommand.mockResolvedValueOnce({
+      payloads: [{ text: "fetch failed", isError: true }],
+    } as never);
+    const res = await postChatCompletions(port, {
+      model: "openclaw",
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { error?: { message?: string } };
+    expect(body.error?.message).toContain("fetch failed");
+  });
+
+  it("returns 200 when isError payloads are guard policy refusals (judge/eval can score)", async () => {
+    const port = enabledPort;
+    agentCommand.mockClear();
+    agentCommand.mockResolvedValueOnce({
+      payloads: [
+        {
+          text: "Blocked by guard model. credential_or_secret_access; none",
+          isError: true,
+        },
+      ],
+    } as never);
+    const res = await postChatCompletions(port, {
+      model: "openclaw",
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    expect(body.choices?.[0]?.message?.content).toContain("Blocked by guard model");
+  });
+
   it("rejects when disabled (default + config)", { timeout: 15_000 }, async () => {
     await expectChatCompletionsDisabled(startServerWithDefaultConfig);
     await expectChatCompletionsDisabled((port) =>

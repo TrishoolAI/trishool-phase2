@@ -21,6 +21,8 @@ export type JudgeResponse = {
 };
 
 export type AppConfig = {
+  /** Semver for this deployment; served at GET /version (alignet spec encoding). */
+  version?: string;
   server: {
     host: string;
     port: number;
