@@ -344,12 +344,33 @@ class PlatformAPIClient:
             )
             return None
     
+    def _compose_healthcheck_spec_version(
+        self, subnet_versions: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Single human-readable spec_version string for the platform (no extra JSON keys).
+        Alignet code spec plus one encoded int per agent (from GET /version spec_version),
+        e.g. "code_version: 2004, tri_claw_version: 2005, tri_judge_version: 2005".
+        Semver strings from /version are not included here.
+        """
+        segments: List[str] = [f"code_version: {spec_version}"]
+        if not subnet_versions:
+            return ", ".join(segments)
+        for label, key in (
+            ("tri_claw_version", "tri_claw_spec_version"),
+            ("tri_judge_version", "tri_judge_spec_version"),
+        ):
+            value = subnet_versions.get(key)
+            if value is not None and str(value).strip() != "":
+                segments.append(f"{label}: {str(value).strip()}")
+        return ", ".join(segments)
+
     async def healthcheck(self, subnet_versions: Optional[Dict[str, Any]] = None) -> bool:
         """
         Send healthcheck to platform.
 
-        Optional subnet_versions: extra fields from tri-claw / tri-judge GET /version
-        (e.g. tri_claw_version, tri_claw_spec_version, tri_judge_version, tri_judge_spec_version).
+        Optional subnet_versions: from tri-claw / tri-judge GET /version; encoded spec
+        ints only are folded into spec_version (not semver strings).
 
         Returns:
             True if successful, False otherwise
@@ -357,12 +378,8 @@ class PlatformAPIClient:
         url = f"{self.platform_api_url}/api/v1/validator/healthcheck"
         body: Dict[str, Any] = {
             "hotkey": self.wallet.hotkey.ss58_address if self.wallet else "",
-            "spec_version": str(spec_version),
+            "spec_version": self._compose_healthcheck_spec_version(subnet_versions),
         }
-        if subnet_versions:
-            for key, value in subnet_versions.items():
-                if value is not None:
-                    body[key] = value
         error_text = None
         
         # Retry 3 times
