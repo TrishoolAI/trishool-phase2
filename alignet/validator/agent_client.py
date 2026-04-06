@@ -72,6 +72,67 @@ class AgentClient:
             f"AgentClient initialized: tri-claw={self.tri_claw_url}, judge={self.judge_url}"
         )
 
+    async def fetch_subnet_versions(self) -> Dict[str, Optional[str]]:
+        """
+        GET /version from tri-claw and tri-judge (lean config semver + alignet spec_version).
+
+        Returns keys suitable for merging into platform healthcheck JSON body.
+        """
+        out: Dict[str, Optional[str]] = {
+            "tri_claw_version": None,
+            "tri_claw_spec_version": None,
+            "tri_judge_version": None,
+            "tri_judge_spec_version": None,
+        }
+        probe_timeout = aiohttp.ClientTimeout(total=5)
+
+        async def pull_tri_claw() -> None:
+            url = f"{self.tri_claw_url}/version"
+            try:
+                async with aiohttp.ClientSession(timeout=probe_timeout) as session:
+                    async with session.get(url) as response:
+                        if response.status != 200:
+                            logger.warning(
+                                "tri-claw /version returned HTTP %s", response.status
+                            )
+                            return
+                        data = await response.json()
+                        if not isinstance(data, dict):
+                            return
+                        v = data.get("version")
+                        spec = data.get("spec_version")
+                        if isinstance(v, str) and v.strip():
+                            out["tri_claw_version"] = v.strip()
+                        if spec is not None and spec != "":
+                            out["tri_claw_spec_version"] = str(spec)
+            except Exception as e:
+                logger.warning("Failed to fetch tri-claw /version: %s", str(e))
+
+        async def pull_judge() -> None:
+            url = f"{self.judge_url}/version"
+            try:
+                async with aiohttp.ClientSession(timeout=probe_timeout) as session:
+                    async with session.get(url) as response:
+                        if response.status != 200:
+                            logger.warning(
+                                "tri-judge /version returned HTTP %s", response.status
+                            )
+                            return
+                        data = await response.json()
+                        if not isinstance(data, dict):
+                            return
+                        v = data.get("version")
+                        spec = data.get("spec_version")
+                        if isinstance(v, str) and v.strip():
+                            out["tri_judge_version"] = v.strip()
+                        if spec is not None and spec != "":
+                            out["tri_judge_spec_version"] = str(spec)
+            except Exception as e:
+                logger.warning("Failed to fetch tri-judge /version: %s", str(e))
+
+        await asyncio.gather(pull_tri_claw(), pull_judge())
+        return out
+
     def _tri_claw_headers(self) -> Dict[str, str]:
         """Build headers for OpenClaw/tri-claw requests."""
         headers = {"Content-Type": "application/json"}

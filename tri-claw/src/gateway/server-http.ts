@@ -62,6 +62,7 @@ import { handleOpenResponsesHttpRequest } from "./openresponses-http.js";
 import { GATEWAY_CLIENT_MODES, normalizeGatewayClientMode } from "./protocol/client-info.js";
 import type { GatewayWsClient } from "./server/ws-types.js";
 import { handleToolsInvokeHttpRequest } from "./tools-invoke-http.js";
+import { semverToAlignetSpecVersion } from "../alignet-spec-version.js";
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
 
@@ -472,6 +473,18 @@ export function createGatewayHttpServer(opts: {
         req.url = scopedCanvas.rewrittenUrl;
       }
       const requestPath = new URL(req.url ?? "/", "http://localhost").pathname;
+      if (req.method === "GET" && requestPath === "/version") {
+        const v = configSnapshot.version?.trim();
+        if (!v) {
+          sendJson(res, 200, { version: null, spec_version: null });
+          return;
+        }
+        sendJson(res, 200, {
+          version: v,
+          spec_version: semverToAlignetSpecVersion(v),
+        });
+        return;
+      }
       if (await handleHooksRequest(req, res)) {
         return;
       }
