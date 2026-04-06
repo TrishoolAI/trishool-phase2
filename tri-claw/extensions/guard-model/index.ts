@@ -14,6 +14,7 @@ import { getCustomProviderApiKey, resolveEnvApiKey } from "../../src/agents/mode
 import { extractAssistantText } from "../../src/agents/tools/sessions-helpers.js";
 import { resolveModelTarget } from "../../src/commands/models/shared.js";
 import { extractTextFromChatContent } from "../../src/shared/chat-content.js";
+import { SuppressModelFallbackError } from "../../src/agents/suppress-model-fallback-error.js";
 import { safeJsonStringify } from "../../src/utils/safe-json.js";
 
 const GUARD_PLUGIN_ID = "guard-model";
@@ -36,7 +37,8 @@ type GuardScopeConfig = {
 
 type GuardPolicyConfig = {
   parseMode?: "json_only" | "json_or_safety_label";
-  evaluationFailureAction?: "allow" | "block";
+  /** `error`: throw immediately and skip agent model fallback (strict operational mode). */
+  evaluationFailureAction?: "allow" | "block" | "error";
   unknownSafetyLabelAction?: "allow" | "block";
   allowLabels?: string[];
   blockLabels?: string[];
@@ -179,7 +181,9 @@ function normalizeGuardPolicyConfig(value: unknown): Required<GuardPolicyConfig>
         ? value.parseMode
         : DEFAULT_POLICY.parseMode,
     evaluationFailureAction:
-      value.evaluationFailureAction === "allow" || value.evaluationFailureAction === "block"
+      value.evaluationFailureAction === "allow" ||
+      value.evaluationFailureAction === "block" ||
+      value.evaluationFailureAction === "error"
         ? value.evaluationFailureAction
         : DEFAULT_POLICY.evaluationFailureAction,
     unknownSafetyLabelAction:
@@ -685,6 +689,12 @@ async function runGuardCheckSafe(params: {
     return await runGuardCheck(params);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (policy.evaluationFailureAction === "error") {
+      throw new SuppressModelFallbackError(
+        `Guard evaluation failed (${params.phase}, ${params.provider}/${params.model}): ${message}`,
+        { cause: error },
+      );
+    }
     params.api.logger.warn(
       `[guard-model] ${params.phase} guard evaluation failed for ${params.provider}/${params.model}; ${policy.evaluationFailureAction}ing request. ${message}`,
     );
@@ -792,7 +802,7 @@ export default function register(api: OpenClawPluginApi) {
               },
             });
             if (inputDecision.decision === "block") {
-              throw new Error(buildBlockErrorMessage(liveCfg, inputDecision.reason));
+              throw new SuppressModelFallbackError(buildBlockErrorMessage(liveCfg, inputDecision.reason));
             }
           }
 
@@ -834,7 +844,7 @@ export default function register(api: OpenClawPluginApi) {
               },
             });
             if (outputDecision.decision === "block") {
-              throw new Error(buildBlockErrorMessage(liveCfg, outputDecision.reason));
+              throw new SuppressModelFallbackError(buildBlockErrorMessage(liveCfg, outputDecision.reason));
             }
           }
 
