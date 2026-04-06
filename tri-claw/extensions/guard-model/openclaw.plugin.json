@@ -34,7 +34,7 @@
           },
           "evaluationFailureAction": {
             "type": "string",
-            "enum": ["allow", "block"]
+            "enum": ["allow", "block", "error"]
           },
           "unknownSafetyLabelAction": {
             "type": "string",

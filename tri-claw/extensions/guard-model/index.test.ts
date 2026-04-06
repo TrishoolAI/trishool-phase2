@@ -180,6 +180,13 @@ describe("guard-model helpers", () => {
     );
   });
 
+  it("accepts evaluationFailureAction error for strict guard failures", () => {
+    const policy = __testing.normalizeGuardPolicyConfig({
+      evaluationFailureAction: "error",
+    });
+    expect(policy.evaluationFailureAction).toBe("error");
+  });
+
   it("lets policy override safety-label defaults", () => {
     const policy = __testing.normalizeGuardPolicyConfig({
       allowLabels: ["safe"],
