@@ -1,6 +1,12 @@
 import { callJudge, isSuccessfulJailbreak } from "./clients/judge.js";
 import { callOpenClaw } from "./clients/openclaw.js";
-import { formatChutesKeyForLog, redactSecrets, redactSecretsFromObject, type ResolvedServiceUrls } from "./env.js";
+import {
+  formatChutesKeyForLog,
+  fixtureSecretsToRedactInDisplay,
+  redactSecrets,
+  redactSecretsFromObject,
+  type ResolvedServiceUrls,
+} from "./env.js";
 import { overlayMetaLookup } from "./groundTruth.js";
 import { indexQuestionsById, loadQuestionsFromPath, loadSubmission } from "./io.js";
 import type {
@@ -156,6 +162,7 @@ async function evaluateOne(params: {
   fixtureRedact: string[];
 }): Promise<PerQuestionResult> {
   const { id, prompt, openclawBase, judgeBase, urls, meta, submissionMeta, verbose, fixtureRedact } = params;
+  const displayFixtureRedact = fixtureSecretsToRedactInDisplay(fixtureRedact);
   const metadata = submissionMeta
     ? {
         technique: submissionMeta.technique,
@@ -194,19 +201,17 @@ async function evaluateOne(params: {
     if (verbose) {
       printVerbose(`${id} OpenClaw request`, { base: openclawBase, promptLength: prompt.length });
     }
-    openclawResponse = redactSecrets(
-      await callOpenClaw(openclawBase, urls, prompt),
-      urls,
-      fixtureRedact,
-    );
+    const rawOpenclawResponse = await callOpenClaw(openclawBase, urls, prompt);
+    openclawResponse = rawOpenclawResponse;
     if (verbose) {
+      const preview = redactSecrets(rawOpenclawResponse.slice(0, 500), urls, displayFixtureRedact);
       printVerbose(`${id} OpenClaw response preview`, {
-        length: openclawResponse.length,
-        preview: openclawResponse.slice(0, 500),
+        length: rawOpenclawResponse.length,
+        preview,
       });
     }
   } catch (e) {
-    const msg = redactSecrets(e instanceof Error ? e.message : String(e), urls, fixtureRedact);
+    const msg = redactSecrets(e instanceof Error ? e.message : String(e), urls, displayFixtureRedact);
     printSection("Error", `OpenClaw: ${msg}`);
     printQuestionEndSeparator();
     return {
@@ -222,7 +227,10 @@ async function evaluateOne(params: {
     };
   }
 
-  printSection("OpenClaw Response", openclawResponse);
+  printSection(
+    "OpenClaw Response",
+    redactSecrets(openclawResponse, urls, displayFixtureRedact),
+  );
 
   try {
     const judgeResultRaw = await callJudge(judgeBase, urls, {
@@ -233,7 +241,7 @@ async function evaluateOne(params: {
       expectedUnsafe: meta.expectedUnsafe,
       groundTruthSecrets: meta.secrets,
     });
-    const judgeResult = redactSecretsFromObject(judgeResultRaw, urls, fixtureRedact);
+    const judgeResult = redactSecretsFromObject(judgeResultRaw, urls, displayFixtureRedact);
     if (verbose) {
       printVerbose(`${id} Judge result`, judgeResult);
     }
@@ -257,7 +265,7 @@ async function evaluateOne(params: {
       metadata,
     };
   } catch (e) {
-    const msg = redactSecrets(e instanceof Error ? e.message : String(e), urls, fixtureRedact);
+    const msg = redactSecrets(e instanceof Error ? e.message : String(e), urls, displayFixtureRedact);
     printSection("Error", `Judge: ${msg}`);
     printQuestionEndSeparator();
     return {

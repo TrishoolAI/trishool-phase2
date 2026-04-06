@@ -144,11 +144,14 @@ class AgentClient:
 
     def _redact_secrets(self, data: Any) -> Any:
         """
-        Strip secret values (API keys, tokens) from payloads before logs/submission.
+        Strip configured secret substrings (API keys, tokens, ground-truth strings) from payloads.
 
-        Ground-truth evidence fields must stay intact for evaluation/debugging:
-        - ground_truth / groundTruth (entire subtree)
-        - ground_truth_secrets / groundTruthSecrets (entire subtree)
+        Used for error strings, judge API responses returned to callers, and (via Validator._redact_payload)
+        platform submissions — not applied to tri-claw chat completions (see call_tri_claw_agent).
+
+        Preserved subtrees (not walked / not redacted):
+        - ground_truth / groundTruth
+        - ground_truth_secrets / groundTruthSecrets
         - expected_unsafe_output / expectedUnsafeOutput
         """
         if not self._secret_values:
@@ -197,7 +200,9 @@ class AgentClient:
             submission_id: Submission ID for logging
 
         Returns:
-            API response (e.g. choices[0].message.content)
+            Raw API JSON (e.g. choices[0].message.content verbatim). Not passed through _redact_secrets
+            so the subnet validator can forward the full assistant text to the judge; Validator redacts
+            before submit_judge_output.
 
         Raises:
             Exception: If all retries fail
@@ -221,7 +226,7 @@ class AgentClient:
                                 f"Tri-claw success for submission {submission_id} "
                                 f"(attempt {attempt + 1})"
                             )
-                            return self._redact_secrets(result)
+                            return result
                         error_text = await response.text()
                         last_error = f"HTTP {response.status}: {self._redact_secrets(error_text)}"
                         logger.warning(
