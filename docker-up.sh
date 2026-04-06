@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Bring up tri-shared network, tri-claw (lean), then tri-judge.
 # Always builds both images (tri-claw: docker build; tri-judge: docker compose build) before starting.
-# TEMPORARY (testing): default is --no-cache for both builds. Pass --cache to use Docker layer cache.
-# Also: explicit --no-cache (no-op when default is already no-cache).
+# Optional: --no-cache  →  uncached docker build / compose build for both images.
 # Ignored (no-op): --build  →  kept for old scripts; this script always builds anyway.
 set -euo pipefail
 
@@ -24,15 +23,11 @@ fi
 # Strip trishool-only flags before docker compose (unknown service names / options)
 FORWARD_ARGS=()
 export TRISHOOL_EVAL_RECREATE=0
-# TEMPORARY: set to 0 after testing (or use --cache on each run).
-DOCKER_NO_CACHE=1
+DOCKER_NO_CACHE=0
 for a in "$@"; do
   case "$a" in
     --recreate)
       export TRISHOOL_EVAL_RECREATE=1
-      ;;
-    --cache)
-      DOCKER_NO_CACHE=0
       ;;
     --no-cache)
       DOCKER_NO_CACHE=1
