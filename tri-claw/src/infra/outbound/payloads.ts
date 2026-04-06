@@ -16,6 +16,8 @@ export type OutboundPayloadJson = {
   mediaUrl: string | null;
   mediaUrls?: string[];
   channelData?: Record<string, unknown>;
+  /** True when this payload is a user-facing error (agent/guard/tool failure), not a normal reply. */
+  isError?: boolean;
 };
 
 function mergeMediaUrls(...lists: Array<ReadonlyArray<string | undefined> | undefined>): string[] {
@@ -102,12 +104,18 @@ export function normalizeOutboundPayloads(
 export function normalizeOutboundPayloadsForJson(
   payloads: readonly ReplyPayload[],
 ): OutboundPayloadJson[] {
-  return normalizeReplyPayloadsForDelivery(payloads).map((payload) => ({
-    text: payload.text ?? "",
-    mediaUrl: payload.mediaUrl ?? null,
-    mediaUrls: payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : undefined),
-    channelData: payload.channelData,
-  }));
+  return normalizeReplyPayloadsForDelivery(payloads).map((payload) => {
+    const row: OutboundPayloadJson = {
+      text: payload.text ?? "",
+      mediaUrl: payload.mediaUrl ?? null,
+      mediaUrls: payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : undefined),
+      channelData: payload.channelData,
+    };
+    if (payload.isError === true) {
+      row.isError = true;
+    }
+    return row;
+  });
 }
 
 export function formatOutboundPayloadLog(

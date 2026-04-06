@@ -34,7 +34,8 @@
           },
           "evaluationFailureAction": {
             "type": "string",
-            "enum": ["allow", "block", "error"]
+            "enum": ["allow", "block", "error"],
+            "description": "When guard throws after a successful TCP connection (e.g. HTTP 4xx/5xx from classify, parse errors). DNS/refused/timeout always fail the request regardless. Jailbreak is a normal block from a successful classify response, not this path."
           },
           "unknownSafetyLabelAction": {
             "type": "string",
