@@ -26,6 +26,11 @@ import type { SkillsConfig } from "./types.skills.js";
 import type { ToolsConfig } from "./types.tools.js";
 
 export type OpenClawConfig = {
+  /**
+   * Semver for this deployment (e.g. lean JSON). Exposed at `GET /version` for validators;
+   * encoded as alignet `__spec_version__` (1000*major + 10*minor + patch).
+   */
+  version?: string;
   meta?: {
     /** Last OpenClaw version that wrote this config. */
     lastTouchedVersion?: string;

@@ -894,6 +894,18 @@ describe("normalizeOutboundPayloadsForJson", () => {
           },
         ],
       },
+      {
+        input: [{ text: "fetch failed", isError: true }],
+        expected: [
+          {
+            text: "fetch failed",
+            mediaUrl: null,
+            mediaUrls: undefined,
+            channelData: undefined,
+            isError: true,
+          },
+        ],
+      },
     ]);
 
     for (const testCase of cases) {

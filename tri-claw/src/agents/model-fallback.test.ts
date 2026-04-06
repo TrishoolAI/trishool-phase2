@@ -9,6 +9,7 @@ import { saveAuthProfileStore } from "./auth-profiles.js";
 import { AUTH_STORE_VERSION } from "./auth-profiles/constants.js";
 import { isAnthropicBillingError } from "./live-auth-keys.js";
 import { runWithImageModelFallback, runWithModelFallback } from "./model-fallback.js";
+import { SuppressModelFallbackError } from "./suppress-model-fallback-error.js";
 import { makeModelFallbackCfg } from "./test-helpers/model-fallback-config-fixture.js";
 
 const makeCfg = makeModelFallbackCfg;
@@ -193,6 +194,22 @@ describe("runWithModelFallback", () => {
     expect(result.attempts).toHaveLength(1);
     expect(result.attempts[0].error).toBe("bad request");
     expect(result.attempts[0].reason).toBe("unknown");
+  });
+
+  it("does not fall back when error is SuppressModelFallbackError", async () => {
+    const cfg = makeCfg();
+    const run = vi.fn().mockRejectedValue(new SuppressModelFallbackError("guard evaluation failed"));
+
+    await expect(
+      runWithModelFallback({
+        cfg,
+        provider: "openai",
+        model: "gpt-4.1-mini",
+        run,
+      }),
+    ).rejects.toThrow(/guard evaluation failed/);
+
+    expect(run).toHaveBeenCalledTimes(1);
   });
 
   it("passes original unknown errors to onError during fallback", async () => {

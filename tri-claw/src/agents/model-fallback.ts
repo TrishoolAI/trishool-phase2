@@ -27,6 +27,7 @@ import {
 } from "./model-selection.js";
 import type { FailoverReason } from "./pi-embedded-helpers.js";
 import { isLikelyContextOverflowError } from "./pi-embedded-helpers.js";
+import { isSuppressModelFallbackError } from "./suppress-model-fallback-error.js";
 
 type ModelCandidate = {
   provider: string;
@@ -397,6 +398,9 @@ export async function runWithModelFallback<T>(params: {
       if (isLikelyContextOverflowError(errMessage)) {
         throw err;
       }
+      if (isSuppressModelFallbackError(err)) {
+        throw err;
+      }
       const normalized =
         coerceToFailoverError(err, {
           provider: candidate.provider,
@@ -475,6 +479,9 @@ export async function runWithImageModelFallback<T>(params: {
       };
     } catch (err) {
       if (shouldRethrowAbort(err)) {
+        throw err;
+      }
+      if (isSuppressModelFallbackError(err)) {
         throw err;
       }
       lastError = err;

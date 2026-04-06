@@ -18,8 +18,10 @@ import type { AuthRateLimiter } from "./auth-rate-limit.js";
 import type { ResolvedGatewayAuth } from "./auth.js";
 import { sendJson, setSseHeaders, writeDone } from "./http-common.js";
 import { handleGatewayPostJsonEndpoint } from "./http-endpoint-helpers.js";
+import { loadConfig } from "../config/config.js";
 import { resolveAgentIdForRequest, resolveSessionKey } from "./http-utils.js";
 import type { ResolvedGatewayChatCompletionsStateless } from "./chat-completions-stateless.js";
+import { collectGuardRefusalPrefixes, isGuardPolicyRefusalText } from "./openai-http-guard-refusal.js";
 
 type OpenAiHttpOptions = {
   auth: ResolvedGatewayAuth;
@@ -241,9 +243,32 @@ function coerceRequest(val: unknown): OpenAiChatCompletionRequest {
 }
 
 function resolveAgentResponseText(result: unknown): string {
-  const payloads = (result as { payloads?: Array<{ text?: string }> } | null)?.payloads;
+  const typed = result as {
+    payloads?: Array<{ text?: string; isError?: boolean }>;
+    meta?: { error?: { message?: string } };
+  } | null;
+  const metaErr = typed?.meta?.error?.message?.trim();
+  if (metaErr) {
+    throw new Error(metaErr);
+  }
+  const payloads = typed?.payloads;
   if (!Array.isArray(payloads) || payloads.length === 0) {
     return "No response from OpenClaw.";
+  }
+  const errorParts = payloads.filter((p) => p.isError === true);
+  if (errorParts.length > 0) {
+    const refusalPrefixes = collectGuardRefusalPrefixes(loadConfig());
+    const operationalErrors = errorParts.filter((p) => {
+      const t = typeof p.text === "string" ? p.text : "";
+      return !isGuardPolicyRefusalText(t, refusalPrefixes);
+    });
+    if (operationalErrors.length > 0) {
+      const msg = operationalErrors
+        .map((p) => (typeof p.text === "string" ? p.text.trim() : ""))
+        .filter(Boolean)
+        .join("\n\n");
+      throw new Error(msg || "OpenClaw returned an error payload without a message.");
+    }
   }
   const content = payloads
     .map((p) => (typeof p.text === "string" ? p.text : ""))
@@ -342,8 +367,12 @@ export async function handleOpenAiHttpRequest(
       });
     } catch (err) {
       logWarn(`openai-compat: chat completion failed: ${String(err)}`);
-      sendJson(res, 500, {
-        error: { message: "internal error", type: "api_error" },
+      const message = err instanceof Error ? err.message : String(err);
+      sendJson(res, 502, {
+        error: {
+          message: message || "bad_gateway",
+          type: "api_error",
+        },
       });
     }
     return true;
@@ -429,10 +458,15 @@ export async function handleOpenAiHttpRequest(
       if (closed) {
         return;
       }
+      const errText = err instanceof Error ? err.message : String(err);
+      if (!wroteRole) {
+        wroteRole = true;
+        writeAssistantRoleChunk(res, { runId, model });
+      }
       writeAssistantContentChunk(res, {
         runId,
         model,
-        content: "Error: internal error",
+        content: errText.slice(0, 8000),
         finishReason: "stop",
       });
       emitAgentEvent({

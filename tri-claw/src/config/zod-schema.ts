@@ -126,6 +126,8 @@ const HttpUrlSchema = z
 export const OpenClawSchema = z
   .object({
     $schema: z.string().optional(),
+    /** Subnet / deployment semver; served at GET /version */
+    version: z.string().optional(),
     meta: z
       .object({
         lastTouchedVersion: z.string().optional(),

@@ -74,6 +74,36 @@ describe("createApp", () => {
     await app.close();
   });
 
+  it("returns version and alignet spec_version when config.version is set", async () => {
+    const app = createApp({
+      ...config,
+      version: "2.0.4",
+      judge: { ...config.judge, baseURL: "http://127.0.0.1" },
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/version",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ version: "2.0.4", spec_version: 2004 });
+    await app.close();
+  });
+
+  it("returns null version when config.version is unset", async () => {
+    const app = createApp({ ...config, judge: { ...config.judge, baseURL: "http://127.0.0.1" } });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/version",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ version: null, spec_version: null });
+    await app.close();
+  });
+
   it("rejects evaluate without X-Chutes-Api-Key header", async () => {
     const app = createApp({ ...config, judge: { ...config.judge, baseURL: "http://127.0.0.1" } });
 
