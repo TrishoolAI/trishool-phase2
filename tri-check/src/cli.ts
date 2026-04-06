@@ -31,6 +31,7 @@ Env (see .env.example):
   JUDGE_URL, CHUTES_API_KEY (optional)
   TRISHOOL_EVAL_GROUND_TRUTH — path to ground-truth.json (optional; default ../tri-claw/docker/eval-fixtures/)
   TRI_CHECK_NO_GROUND_TRUTH=1 — do not merge fixture ground truth (use rubric file only)
+  TRI_CHECK_REDACT_FIXTURE_OUTPUT=1 — redact ground-truth substrings in printed output only (judge still sees raw model text by default)
 
 Examples:
   cd tri-check && pnpm install && pnpm eval --submission ../alignet/cli/my_submission.json
