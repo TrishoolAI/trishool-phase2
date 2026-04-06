@@ -187,6 +187,28 @@ describe("guard-model helpers", () => {
     expect(policy.evaluationFailureAction).toBe("error");
   });
 
+  it("isGuardConnectivityFailure detects DNS/refused/timeout and fetch TypeError", () => {
+    expect(__testing.isGuardConnectivityFailure(Object.assign(new Error("e"), { code: "ECONNREFUSED" }))).toBe(
+      true,
+    );
+    expect(__testing.isGuardConnectivityFailure(Object.assign(new Error("e"), { code: "ENOTFOUND" }))).toBe(true);
+    const aborted = new Error("aborted");
+    aborted.name = "AbortError";
+    expect(__testing.isGuardConnectivityFailure(aborted)).toBe(true);
+    expect(__testing.isGuardConnectivityFailure(new TypeError("fetch failed"))).toBe(true);
+    expect(__testing.isGuardConnectivityFailure(new Error("classify HTTP 401: nope"))).toBe(false);
+    expect(
+      __testing.isGuardConnectivityFailure(
+        Object.assign(new Error("wrap"), { cause: Object.assign(new Error("inner"), { code: "ETIMEDOUT" }) }),
+      ),
+    ).toBe(true);
+    expect(
+      __testing.isGuardConnectivityFailure(
+        new AggregateError([Object.assign(new Error("a"), { code: "ECONNREFUSED" })]),
+      ),
+    ).toBe(true);
+  });
+
   it("lets policy override safety-label defaults", () => {
     const policy = __testing.normalizeGuardPolicyConfig({
       allowLabels: ["safe"],

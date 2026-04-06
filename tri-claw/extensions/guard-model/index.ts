@@ -71,6 +71,75 @@ type GuardDecision = {
   reason?: string;
 };
 
+/** TCP/DNS/TLS/timeout: guard service could not be reached; always fail the request. */
+const GUARD_CONNECTIVITY_ERROR_CODES = new Set([
+  "ECONNREFUSED",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "ETIMEDOUT",
+  "ECONNRESET",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+  "EPIPE",
+  "CERT_HAS_EXPIRED",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+]);
+
+function readErrnoCode(err: unknown): string | undefined {
+  if (!err || typeof err !== "object") {
+    return undefined;
+  }
+  const code = (err as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
+}
+
+function isAbortOrTimeoutError(err: unknown): boolean {
+  if (!err || typeof err !== "object") {
+    return false;
+  }
+  const name = (err as { name?: unknown }).name;
+  return name === "AbortError" || name === "TimeoutError";
+}
+
+/**
+ * True when the guard could not complete a network round-trip (DNS, TCP, TLS, timeout).
+ * Does not include HTTP 4xx/5xx after a connection was made, or successful classify → block (jailbreak).
+ */
+function isGuardConnectivityFailure(error: unknown): boolean {
+  if (error instanceof AggregateError) {
+    return error.errors.some((e) => isGuardConnectivityFailure(e));
+  }
+  let current: unknown = error;
+  for (let depth = 0; depth < 10; depth += 1) {
+    if (current == null) {
+      break;
+    }
+    if (isAbortOrTimeoutError(current)) {
+      return true;
+    }
+    const code = readErrnoCode(current);
+    if (code && GUARD_CONNECTIVITY_ERROR_CODES.has(code)) {
+      return true;
+    }
+    if (typeof current === "object" && "cause" in current) {
+      const next = (current as { cause?: unknown }).cause;
+      if (next === undefined) {
+        break;
+      }
+      current = next;
+      continue;
+    }
+    break;
+  }
+  if (error instanceof TypeError) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes("fetch failed") || msg.includes("network error")) {
+      return true;
+    }
+  }
+  return false;
+}
+
 type GuardSafetyLabelResult = {
   label: string;
   reason?: string;
@@ -689,11 +758,16 @@ async function runGuardCheckSafe(params: {
     return await runGuardCheck(params);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const trimmed = message.trim();
+    /** Surface the real fetch/parse/classify error for debugging; `cause` keeps the original stack. */
+    const surfaceMessage =
+      trimmed ||
+      `Empty error message (guard-model ${params.phase} ${params.provider}/${params.model})`;
+    if (isGuardConnectivityFailure(error)) {
+      throw new SuppressModelFallbackError(surfaceMessage, { cause: error });
+    }
     if (policy.evaluationFailureAction === "error") {
-      throw new SuppressModelFallbackError(
-        `Guard evaluation failed (${params.phase}, ${params.provider}/${params.model}): ${message}`,
-        { cause: error },
-      );
+      throw new SuppressModelFallbackError(surfaceMessage, { cause: error });
     }
     params.api.logger.warn(
       `[guard-model] ${params.phase} guard evaluation failed for ${params.provider}/${params.model}; ${policy.evaluationFailureAction}ing request. ${message}`,
@@ -768,6 +842,7 @@ export const __testing = {
   buildClassifyQueryString,
   isChutesClassifyConfigured,
   resolveChutesApiKeyForGuard,
+  isGuardConnectivityFailure,
 };
 
 export default function register(api: OpenClawPluginApi) {
