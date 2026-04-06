@@ -344,18 +344,25 @@ class PlatformAPIClient:
             )
             return None
     
-    async def healthcheck(self) -> bool:
+    async def healthcheck(self, subnet_versions: Optional[Dict[str, Any]] = None) -> bool:
         """
         Send healthcheck to platform.
-        
+
+        Optional subnet_versions: extra fields from tri-claw / tri-judge GET /version
+        (e.g. tri_claw_version, tri_claw_spec_version, tri_judge_version, tri_judge_spec_version).
+
         Returns:
             True if successful, False otherwise
         """
         url = f"{self.platform_api_url}/api/v1/validator/healthcheck"
-        body = {
+        body: Dict[str, Any] = {
             "hotkey": self.wallet.hotkey.ss58_address if self.wallet else "",
-            "spec_version": str(spec_version)
+            "spec_version": str(spec_version),
         }
+        if subnet_versions:
+            for key, value in subnet_versions.items():
+                if value is not None:
+                    body[key] = value
         error_text = None
         
         # Retry 3 times

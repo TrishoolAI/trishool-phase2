@@ -89,7 +89,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   const modelChain = parseModelChain(judge, "judge");
 
+  const rootVersion =
+    typeof parsed.version === "string" && parsed.version.trim().length > 0
+      ? parsed.version.trim()
+      : undefined;
+
   return {
+    version: rootVersion,
     server: {
       host: requireString(server, "host", "server"),
       port: requireNumber(server, "port", "server"),

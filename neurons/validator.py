@@ -59,6 +59,17 @@ from alignet.utils.logging import get_logger
 logger = get_logger()
 
 
+def _first_agent_base_url(default: str, *env_keys: str) -> str:
+    """First non-empty env value (comma-separated lists use the first URL)."""
+    for key in env_keys:
+        raw = os.getenv(key)
+        if raw and raw.strip():
+            first = raw.split(",")[0].strip()
+            if first:
+                return first
+    return default
+
+
 class Validator(BaseValidatorNeuron):
     """
     Alignet Subnet Validator.
@@ -95,8 +106,18 @@ class Validator(BaseValidatorNeuron):
         )
         # Initialize Agent Client for HTTP calls to agent containers (single URL per agent)
         # Tri-claw (OpenClaw) auth: OPENCLAW_GATEWAY_PASSWORD or OPENCLAW_GATEWAY_TOKEN; optional CHUTES_API_KEY
-        tri_claw_url = (os.getenv("TRI_CLAW_AGENT_URLS", "http://localhost:8001").split(",")[0] or "http://localhost:8001").strip()
-        judge_url = (os.getenv("JUDGE_AGENT_URLS", "http://localhost:8003").split(",")[0] or "http://localhost:8003").strip()
+        # TRI_* / JUDGE_AGENT_* (PM2), or OPENCLAW_URL / JUDGE_URL (shared .env with tri-check README).
+        # Defaults match docker-compose / validator.config.sample.js (gateway 18789, judge 8080).
+        tri_claw_url = _first_agent_base_url(
+            "http://localhost:18789",
+            "TRI_CLAW_AGENT_URLS",
+            "OPENCLAW_URL",
+        )
+        judge_url = _first_agent_base_url(
+            "http://localhost:8080",
+            "JUDGE_AGENT_URLS",
+            "JUDGE_URL",
+        )
 
         self.agent_client = AgentClient(
             tri_claw_base_url=tri_claw_url,
@@ -161,7 +182,8 @@ class Validator(BaseValidatorNeuron):
             if self.latest_weight_update_timestamp is None or datetime.now() - self.latest_weight_update_timestamp > timedelta(seconds=self.update_weights_interval):
                 logger.info("Updating weights, health checking and uploading logs")
                 await self._update_weights()
-                await self.api_client.healthcheck()
+                subnet_versions = await self.agent_client.fetch_subnet_versions()
+                await self.api_client.healthcheck(subnet_versions=subnet_versions)
                 await self._upload_logs()
                 self.latest_weight_update_timestamp = datetime.now()
 

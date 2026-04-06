@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { JudgeUpstreamError, RequestValidationError } from "./errors.js";
 import { parseEvaluateQuestionRequest } from "./request.js";
 import type { AppConfig } from "./types.js";
+import { semverToAlignetSpecVersion } from "./alignet-spec-version.js";
 import { JudgeClient } from "./judge-client.js";
 
 export function createApp(config: AppConfig): FastifyInstance {
@@ -16,6 +17,14 @@ export function createApp(config: AppConfig): FastifyInstance {
   app.get("/health", async () => ({
     status: "ok",
   }));
+
+  app.get("/version", async () => {
+    const v = config.version?.trim();
+    if (!v) {
+      return { version: null, spec_version: null };
+    }
+    return { version: v, spec_version: semverToAlignetSpecVersion(v) };
+  });
 
   app.post("/v1/judge/evaluate", async (request, reply) => {
     try {
