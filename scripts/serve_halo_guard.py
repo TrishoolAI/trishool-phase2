@@ -120,6 +120,14 @@ log.info(
 
 DEFAULT_MODEL_ID = "astroware/Halo0.8B-guard-v1"
 
+# From qwen35_guard_runtime.py — required so the model knows it's a safety classifier.
+DEFAULT_GUARD_SYSTEM_PROMPT = (
+    "Output ONLY in this format:\n"
+    "Safety: [safe/controversial/unsafe]\n"
+    "Category: [primary category or none]\n"
+    "AttackOverlay: [none/jailbreak/prompt_injection]"
+)
+
 
 def _heartbeat_until_event(
     message: str,
@@ -333,7 +341,7 @@ def _parse_guard_lines(text: str) -> dict[str, Any]:
     if m:
         safety_token = m.group(1).strip()
     category = "none"
-    m = re.search(r"(?im)^\s*Categories?:\s*(.+?)\s*$", raw)
+    m = re.search(r"(?im)^\s*Categor(?:y|ies):\s*(.+?)\s*$", raw)
     if m:
         category = m.group(1).strip()
     attack = "none"
@@ -415,11 +423,11 @@ class ServerState:
 
 
 def classify_query(state: ServerState, user_text: str, *, role: str | None = None) -> dict[str, Any]:
-    conditioned = _apply_classify_role_to_user_text(user_text, role)
-    messages: list[dict[str, str]] = []
-    if state.system_prompt:
-        messages.append({"role": "system", "content": state.system_prompt})
-    messages.append({"role": "user", "content": conditioned})
+    system_prompt = state.system_prompt or DEFAULT_GUARD_SYSTEM_PROMPT
+    messages: list[dict[str, str]] = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_text},
+    ]
 
     tok = state.tokenizer
     try:
@@ -427,13 +435,20 @@ def classify_query(state: ServerState, user_text: str, *, role: str | None = Non
             messages,
             tokenize=False,
             add_generation_prompt=True,
+            enable_thinking=False,
         )
-    except Exception as exc:
-        raise RuntimeError(
-            "apply_chat_template failed; check chat_template.jinja loaded correctly or upgrade transformers."
-        ) from exc
+    except TypeError:
+        prompt = tok.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
 
-    inputs = tok(prompt, return_tensors="pt", truncation=True, max_length=state.max_length)
+    # Prime the generation with "Safety: " so the model continues in the structured format
+    # (matches qwen35_guard_runtime.py behavior and Chutes deployment).
+    prompt_with_prefix = prompt + "Safety: "
+
+    inputs = tok(prompt_with_prefix, return_tensors="pt", truncation=True, max_length=state.max_length)
     inputs = {k: v.to(state.device) for k, v in inputs.items()}
 
     pad_id = tok.pad_token_id
@@ -450,7 +465,10 @@ def classify_query(state: ServerState, user_text: str, *, role: str | None = Non
         )
     in_len = inputs["input_ids"].shape[1]
     gen_ids = out[0, in_len:]
-    decoded = tok.decode(gen_ids, skip_special_tokens=True)
+    raw_decoded = tok.decode(gen_ids, skip_special_tokens=True)
+    # Prepend "Safety: " back since we used it as a generation prefix
+    decoded = "Safety: " + raw_decoded
+    log.info("Raw model output: %s", decoded.replace("\n", "\\n")[:300])
     return _parse_guard_lines(decoded)
 
 
