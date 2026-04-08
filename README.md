@@ -78,15 +78,9 @@ cp .env.example .env
 
 Edit `tri-check/.env`: `OPENCLAW_URL`, `JUDGE_URL`, gateway password (must match `.env.tri-claw`), and `CHUTES_API_KEY` for the agent on Chutes. See [tri-check/README.md](tri-check/README.md) for commands, batch mode, and guard probe.
 
-### 5. Local Halo guard Python deps (optional — `docker-up.sh --local` / `pnpm eval … --local`)
+### 5. Local Halo guard (optional — `docker-up.sh --local`)
 
-If you use **`--local`** so classify calls hit [`scripts/serve_halo_guard.py`](scripts/serve_halo_guard.py) on the host instead of Chutes, install dependencies into the **same** interpreter you will use (conda/venv recommended):
-
-```bash
-pip install -r scripts/requirements-halo-guard.txt
-```
-
-The script needs **PyTorch** and a recent **transformers** (Qwen3.5 / `qwen3_5`). First run downloads **`astroware/Halo0.8B-guard-v1`** from Hugging Face unless you use a local snapshot and [`HALO_GUARD_LOCAL_FILES_ONLY=1`](.env.example) (or `HF_HUB_OFFLINE=1` when the cache is complete). `docker-up.sh` picks a Python that can `import torch, transformers` (see `HALO_GUARD_PYTHON` in [`.env.example`](.env.example)).
+If you run the guard on the host and use **`pnpm eval … --local`**, follow the dedicated guide **[LOCAL-GUARD.md](LOCAL-GUARD.md)** (installation, env vars, Docker networking, troubleshooting).
 
 ### 6. Set up environment files
 
