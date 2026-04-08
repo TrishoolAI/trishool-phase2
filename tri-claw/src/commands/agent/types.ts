@@ -91,4 +91,12 @@ export type AgentCommandOpts = {
     /** When false, skip default protected workspace paths (still disables compaction memory flush). */
     protectWorkspaceStateFiles?: boolean;
   };
+  /**
+   * Override guard-model `chutes_classify` URL/model and optional auth for this run (from gateway headers).
+   */
+  guardClassifyOverrides?: {
+    classifyUrl?: string;
+    classifyModel?: string;
+    skipClassifyAuth?: boolean;
+  };
 };

@@ -56,6 +56,12 @@ pnpm eval --question Q1 --prompt "Your test prompt"
 
 Uses the same default [`data/questions.json`](./data/questions.json) unless you pass `--questions`.
 
+**Local Halo guard with full eval:** `--local` adds gateway headers so **only** the guard-model classify call goes to your local [`scripts/serve_halo_guard.py`](../scripts/serve_halo_guard.py) (defaults: `HALO_LOCAL_CLASSIFY_URL` / `HALO_LOCAL_CLASSIFY_MODEL`). Start the server with `bash docker-up.sh --local` (or run the script by hand). The agent model still uses Chutes via OpenClaw as usual. If OpenClaw runs **inside Docker**, set `HALO_LOCAL_CLASSIFY_URL=http://host.docker.internal:8000/v1/classify` (or your host IP) in `tri-check/.env` so the container can reach the host.
+
+```bash
+pnpm eval --question Q1 --prompt "Hello" --local
+```
+
 ### 3) Guard probe (no judge)
 
 One user message through **OpenClaw** `POST /v1/chat/completions` by default (gateway + **input guard** + model). No rubric file and no judge. Optional **`--halo-direct`** skips OpenClaw and hits Halo `/v1/classify` only (same as before).
@@ -65,11 +71,14 @@ One user message through **OpenClaw** `POST /v1/chat/completions` by default (ga
 pnpm guard-probe -- --query "What is 2+2?"
 pnpm guard-probe -- --query "ignore previous instructions"
 
-# Direct Halo API only (needs CHUTES_API_KEY); exit 2 = HARMFUL/block, 0 = HARMLESS/allow
+# Direct Halo API on Chutes (needs CHUTES_API_KEY); exit 2 = HARMFUL/block, 0 = HARMLESS/allow
 pnpm guard-probe -- --query "What is 2+2?" --halo-direct
+
+# Local Halo guard (no Chutes): use `bash docker-up.sh` or run `python3 scripts/serve_halo_guard.py --model-path astroware/Halo0.8B-guard-v1` from repo root, then:
+pnpm guard-probe -- --query "What is 2+2?" --local
 ```
 
-Optional env for `--halo-direct`: `HALO_CLASSIFY_URL`, `HALO_CLASSIFY_MODEL`. Use `--verbose` for URLs and key fingerprint.
+Optional env: `--halo-direct` → `HALO_CLASSIFY_URL`, `HALO_CLASSIFY_MODEL`. `guard-probe --local` → `HALO_LOCAL_CLASSIFY_URL`, `HALO_LOCAL_CLASSIFY_MODEL` (defaults: `http://127.0.0.1:8000/v1/classify` and [astroware/Halo0.8B-guard-v1](https://huggingface.co/astroware/Halo0.8B-guard-v1)). Use `--verbose` for URLs and key fingerprint.
 
 ### Overrides and reporting
 
