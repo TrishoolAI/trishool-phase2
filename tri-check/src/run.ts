@@ -22,6 +22,8 @@ export interface RunOptions {
   judgeUrl: string;
   urls: ResolvedServiceUrls;
   verbose: boolean;
+  /** When true, OpenClaw uses local Halo /v1/classify for guard only (HALO_LOCAL_* env); agent model unchanged. */
+  localGuard?: boolean;
   /** Optional: same `questions` map as validator `ground-truth.json` — merges judge secrets / expected_unsafe. */
   groundTruthById?: Map<string, QuestionMeta>;
   /** Substrings from ground truth for log redaction. */
@@ -160,8 +162,10 @@ async function evaluateOne(params: {
   submissionMeta?: SubmissionEntry;
   verbose: boolean;
   fixtureRedact: string[];
+  localGuard?: boolean;
 }): Promise<PerQuestionResult> {
-  const { id, prompt, openclawBase, judgeBase, urls, meta, submissionMeta, verbose, fixtureRedact } = params;
+  const { id, prompt, openclawBase, judgeBase, urls, meta, submissionMeta, verbose, fixtureRedact, localGuard } =
+    params;
   const displayFixtureRedact = fixtureSecretsToRedactInDisplay(fixtureRedact);
   const metadata = submissionMeta
     ? {
@@ -201,7 +205,9 @@ async function evaluateOne(params: {
     if (verbose) {
       printVerbose(`${id} OpenClaw request`, { base: openclawBase, promptLength: prompt.length });
     }
-    const rawOpenclawResponse = await callOpenClaw(openclawBase, urls, prompt);
+    const rawOpenclawResponse = await callOpenClaw(openclawBase, urls, prompt, {
+      localGuard: Boolean(localGuard),
+    });
     openclawResponse = rawOpenclawResponse;
     if (verbose) {
       const preview = redactSecrets(rawOpenclawResponse.slice(0, 500), urls, displayFixtureRedact);
@@ -323,6 +329,7 @@ export async function runFromSubmission(args: {
       submissionMeta: entry,
       verbose: args.options.verbose,
       fixtureRedact: args.options.fixtureRedact ?? [],
+      localGuard: args.options.localGuard,
     });
     results.push(r);
   }
@@ -356,6 +363,7 @@ export async function runDirect(args: {
     meta,
     verbose: args.options.verbose,
     fixtureRedact: args.options.fixtureRedact ?? [],
+    localGuard: args.options.localGuard,
   });
   return summarizeReport([r]);
 }

@@ -1,0 +1,6 @@
+# Minimal deps for scripts/serve_halo_guard.py (astroware/Halo0.8B-guard-v1).
+# Tokenizer uses a PreTrainedTokenizerFast fallback if TokenizersBackend is missing (older transformers).
+torch
+transformers>=4.51.0
+accelerate
+huggingface_hub>=0.20.0

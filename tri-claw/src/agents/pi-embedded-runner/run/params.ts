@@ -103,4 +103,10 @@ export type RunEmbeddedPiAgentParams = {
   streamParams?: AgentStreamParams;
   ownerNumbers?: string[];
   enforceFinalTag?: boolean;
+  /** Per-run guard classify overrides (OpenAI HTTP gateway → wrap_stream_fn). */
+  guardClassifyOverrides?: {
+    classifyUrl?: string;
+    classifyModel?: string;
+    skipClassifyAuth?: boolean;
+  };
 };

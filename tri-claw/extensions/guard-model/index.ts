@@ -10,6 +10,7 @@ import {
   type OpenClawConfig,
   type OpenClawPluginApi,
 } from "openclaw/plugin-sdk";
+import type { GuardClassifyHttpOverrides } from "../../src/plugins/types.js";
 import { getCustomProviderApiKey, resolveEnvApiKey } from "../../src/agents/model-auth.js";
 import { extractAssistantText } from "../../src/agents/tools/sessions-helpers.js";
 import { resolveModelTarget } from "../../src/commands/models/shared.js";
@@ -532,13 +533,17 @@ async function runChutesClassifyGuardCheck(params: {
   provider: string;
   model: string;
   payload: unknown;
+  overrides?: GuardClassifyHttpOverrides;
 }): Promise<GuardDecision> {
-  const url = params.cfg.classifyUrl?.trim();
-  const classifyModel = params.cfg.classifyModel?.trim();
+  const url = (params.overrides?.classifyUrl?.trim() || params.cfg.classifyUrl)?.trim();
+  const classifyModel = (params.overrides?.classifyModel?.trim() || params.cfg.classifyModel)?.trim();
   if (!url || !classifyModel) {
     throw new Error("chutes_classify requires classifyUrl and classifyModel");
   }
-  const apiKey = await resolveChutesApiKeyForGuard(params.openClawConfig);
+  let apiKey = "";
+  if (!params.overrides?.skipClassifyAuth) {
+    apiKey = await resolveChutesApiKeyForGuard(params.openClawConfig);
+  }
   const maxChars = Math.max(1024, Math.trunc(params.cfg.maxPayloadChars ?? DEFAULT_MAX_PAYLOAD_CHARS));
   const queryMode = resolveEffectiveQueryMode(params.cfg, params.phase);
   const query = buildClassifyQueryString({
@@ -553,12 +558,13 @@ async function runChutesClassifyGuardCheck(params: {
     query,
     role: params.phase === "input" ? "input" : "output",
   });
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
+    headers,
     body,
     signal: AbortSignal.timeout(timeoutMs),
   });
@@ -661,6 +667,7 @@ async function runGuardCheck(params: {
   provider: string;
   model: string;
   payload: unknown;
+  guardClassifyOverrides?: GuardClassifyHttpOverrides;
 }): Promise<GuardDecision> {
   const liveConfig =
     params.openClawConfig ?? (params.api.runtime.config.loadConfigFresh() as OpenClawConfig);
@@ -677,6 +684,7 @@ async function runGuardCheck(params: {
       provider: params.provider,
       model: params.model,
       payload: params.payload,
+      overrides: params.guardClassifyOverrides,
     });
     if (cfg.logDecisions) {
       const rawSuffix = cfg.logRawResponses
@@ -749,6 +757,7 @@ async function runGuardCheckSafe(params: {
   provider: string;
   model: string;
   payload: unknown;
+  guardClassifyOverrides?: GuardClassifyHttpOverrides;
 }): Promise<GuardDecision> {
   const liveConfig =
     params.openClawConfig ?? (params.api.runtime.config.loadConfigFresh() as OpenClawConfig);
@@ -848,6 +857,7 @@ export const __testing = {
 export default function register(api: OpenClawPluginApi) {
   api.on("wrap_stream_fn", (event, ctx) => {
     const mergedOpenClawConfig = event.openClawConfig as OpenClawConfig | undefined;
+    const guardClassifyOverrides = event.guardClassifyOverrides;
     const wrapped = ((model, context, options) => {
       const liveCfg = loadLiveGuardConfig(api, mergedOpenClawConfig);
       if ((ctx.sessionId ?? "").startsWith(GUARD_SESSION_PREFIX) || liveCfg.enabled === false) {
@@ -875,6 +885,7 @@ export default function register(api: OpenClawPluginApi) {
                 model: { provider, id: modelId, api: modelApi ?? null },
                 ...buildInputGuardPayload(context, inputScope.payloadMode ?? "full_context"),
               },
+              guardClassifyOverrides,
             });
             if (inputDecision.decision === "block") {
               throw new SuppressModelFallbackError(buildBlockErrorMessage(liveCfg, inputDecision.reason));
@@ -917,6 +928,7 @@ export default function register(api: OpenClawPluginApi) {
                 model: { provider, id: modelId, api: modelApi ?? null },
                 assistantText: lastAssistantText,
               },
+              guardClassifyOverrides,
             });
             if (outputDecision.decision === "block") {
               throw new SuppressModelFallbackError(buildBlockErrorMessage(liveCfg, outputDecision.reason));

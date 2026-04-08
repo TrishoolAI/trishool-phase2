@@ -173,6 +173,10 @@ This brings up:
 - `tri-claw-openclaw-gateway-1` on port **18789**
 - `tri-judge-tri-judge-1` on port **8080**
 
+Optional **local Halo guard** (for `tri-check` / OpenClaw with `--local`): `bash docker-up.sh --local` also starts [`scripts/serve_halo_guard.py`](scripts/serve_halo_guard.py) on the host (`0.0.0.0:8000` by default, model `astroware/Halo0.8B-guard-v1`). Logs: `logs/halo-guard.log`. Set `TRISHOOL_SKIP_LOCAL_HALO_GUARD=1` to skip guard startup even with `--local`. Override bind/port/model with `HALO_GUARD_BIND`, `HALO_GUARD_PORT`, `HALO_GUARD_MODEL`.
+
+**Prerequisite:** host Python needs **`torch`**, **`transformers`** (recent enough for Qwen3.5), and **`accelerate`** — see [`scripts/requirements-halo-guard.txt`](scripts/requirements-halo-guard.txt). First run downloads **`astroware/Halo0.8B-guard-v1`** from Hugging Face unless you pass **`HALO_GUARD_MODEL`** / `--local-files-only` with a cached copy. Optional **`HALO_GUARD_PYTHON`** = path to the venv `python` that has those packages (export before `docker-up.sh`; the script does not read repo `.env` for it). If startup fails, `docker-up.sh` prints a tail of `logs/halo-guard.log`.
+
 Wait ~60 seconds for both services to be fully ready before running anything against them.
 
 ### Stop all agents
@@ -195,7 +199,7 @@ bash docker-up.sh --no-cache
 bash docker-up.sh --recreate
 ```
 
-`--recreate` is **only** for trishool: it rotates `tri-claw/docker/eval-fixtures/` and is stripped before `docker compose` runs for tri-judge.
+`--recreate` is **only** for trishool: it rotates `tri-claw/docker/eval-fixtures/` and is stripped before `docker compose` runs for tri-judge. You can combine flags, e.g. `bash docker-up.sh --recreate --local`.
 
 ---
 

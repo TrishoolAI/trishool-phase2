@@ -29,6 +29,19 @@ export interface ResolvedServiceUrls {
   chutesApiKey: string;
 }
 
+/** Default local Halo classify target (OpenClaw in Docker: set HALO_LOCAL_CLASSIFY_URL to host.docker.internal). */
+export const DEFAULT_LOCAL_GUARD_CLASSIFY_URL = "http://127.0.0.1:8000/v1/classify";
+export const DEFAULT_LOCAL_GUARD_CLASSIFY_MODEL = "astroware/Halo0.8B-guard-v1";
+
+/** Headers consumed by OpenClaw `POST /v1/chat/completions` to override guard classify for that request only. */
+export function openClawLocalGuardHeaders(): Record<string, string> {
+  return {
+    "X-Openclaw-Guard-Classify-Url": (process.env.HALO_LOCAL_CLASSIFY_URL ?? DEFAULT_LOCAL_GUARD_CLASSIFY_URL).trim(),
+    "X-Openclaw-Guard-Classify-Model": (process.env.HALO_LOCAL_CLASSIFY_MODEL ?? DEFAULT_LOCAL_GUARD_CLASSIFY_MODEL).trim(),
+    "X-Openclaw-Guard-Classify-Local": "1",
+  };
+}
+
 export function resolveServiceUrls(overrides?: {
   openclawUrl?: string;
   judgeUrl?: string;

@@ -212,6 +212,7 @@ function runAgentAttempt(params: {
     streamParams: params.opts.streamParams,
     agentDir: params.agentDir,
     onAgentEvent: params.onAgentEvent,
+    guardClassifyOverrides: params.opts.guardClassifyOverrides,
   });
 }
 
