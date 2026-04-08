@@ -15,62 +15,14 @@ Before running `tri-check` against local services, from the **repository root** 
    ```bash
    bash docker-up.sh
    ```
-   For **local Halo guard** on the host (used with `pnpm eval … --local`), use:
-   ```bash
-   bash docker-up.sh --local
-   ```
-   That starts [`../scripts/serve_halo_guard.py`](../scripts/serve_halo_guard.py) after the containers are up (needs host Python with `torch` + `transformers`; see below).
+   For **`--local`** guard on the host, use `bash docker-up.sh --local` and follow **[../LOCAL-GUARD.md](../LOCAL-GUARD.md)** (installation, `HALO_LOCAL_CLASSIFY_URL`, troubleshooting).
 4. **`OPENCLAW_GATEWAY_PASSWORD` must match** between:
    - [`tri-check/.env`](./.env) (what the CLI uses first), and  
    - [`../.env.tri-claw`](../.env.tri-claw) (what the OpenClaw Docker / lean gateway uses)  
 
    If those differ, Bearer auth from `tri-check` will not match the gateway and you’ll get `401` / connection errors.
 
-## Local Halo guard: tri-check `--local` mode
-
-Use this when you want **only** the guard classify request to hit a server on your machine ([`scripts/serve_halo_guard.py`](../scripts/serve_halo_guard.py) with `astroware/Halo0.8B-guard-v1` by default). The **OpenClaw agent** still uses Chutes as configured in `tri-claw`. The gateway must be built from **this** repo so it forwards `X-Openclaw-Guard-*` overrides from tri-check.
-
-### Installation (host Python)
-
-From the **repository root** (not `tri-check/`):
-
-```bash
-# Use conda/venv if PATH python lacks torch
-pip install -r scripts/requirements-halo-guard.txt
-```
-
-If `docker-up.sh --local` skips the guard or picks the wrong interpreter, set **`HALO_GUARD_PYTHON`** to a `python` that passes `python -c "import torch, transformers"` (export in the shell before `docker-up.sh`; see repo-root `.env.example`).
-
-### Start the guard
-
-- **Recommended:** `bash docker-up.sh --local` from the repo root (Docker stack + guard on `:8000`, logs in `logs/halo-guard.log`).
-- **Manual:**  
-  `python scripts/serve_halo_guard.py --model-path astroware/Halo0.8B-guard-v1 --host 0.0.0.0 --port 8000`  
-  Add `--local-files-only` if the model is already in the Hugging Face cache and you want to avoid Hub calls.
-
-### tri-check / OpenClaw env
-
-In **`tri-check/.env`** (loaded before repo-root `.env`, which does not override existing vars):
-
-| Variable | When to set |
-|----------|-------------|
-| `HALO_LOCAL_CLASSIFY_URL` | **Required for Dockerized OpenClaw:** the container cannot use `http://127.0.0.1:8000/...` to reach the host. Use `http://host.docker.internal:8000/v1/classify` on Docker Desktop (macOS/Windows). On Linux, use the host LAN IP or configure `host.docker.internal`. |
-| `HALO_LOCAL_CLASSIFY_MODEL` | Optional; default `astroware/Halo0.8B-guard-v1` (must match what `serve_halo_guard.py` serves). |
-
-Health check: `curl -s http://127.0.0.1:8000/health`
-
-### Commands
-
-```bash
-# Full eval: agent on Chutes, guard on local server
-pnpm eval --question Q11 --prompt "Your prompt" --local
-
-# Guard only (no judge)
-pnpm guard-probe -- --query "Your prompt" --local
-pnpm guard-probe -- --query "..." --local --role output
-```
-
-`CHUTES_API_KEY` is still needed for the agent path; `--local` does not send a Bearer token to the local classify URL.
+**Local Halo guard (`pnpm eval … --local`, `guard-probe --local`):** full install and env are documented in **[../LOCAL-GUARD.md](../LOCAL-GUARD.md)**.
 
 ## Quick start
 
@@ -107,7 +59,7 @@ pnpm eval --question Q1 --prompt "Your test prompt"
 
 Uses the same default [`data/questions.json`](./data/questions.json) unless you pass `--questions`.
 
-**Local Halo guard:** `--local` adds gateway headers so **only** the guard classify call goes to your local server. See **[Local Halo guard: tri-check `--local` mode](#local-halo-guard-tri-check-local-mode)** above for install, `docker-up.sh --local`, and `HALO_LOCAL_CLASSIFY_URL`.
+**Local Halo guard:** `--local` routes **only** the guard classify call to your local server. See **[LOCAL-GUARD.md](../LOCAL-GUARD.md)**.
 
 ```bash
 pnpm eval --question Q1 --prompt "Hello" --local
@@ -161,8 +113,8 @@ See [`.env.example`](./.env.example). Typical variables:
 | `OPENCLAW_GATEWAY_PASSWORD` or `OPENCLAW_GATEWAY_TOKEN` | Bearer token for OpenClaw |
 | `JUDGE_URL` | Judge API base URL |
 | `CHUTES_API_KEY` | Optional; sent as `X-Chutes-Api-Key` on both calls (agent still needs Chutes when using `--local` for guard-only override) |
-| `HALO_LOCAL_CLASSIFY_URL` | Local guard POST URL; default `http://127.0.0.1:8000/v1/classify` — use `http://host.docker.internal:8000/v1/classify` when OpenClaw runs in Docker |
-| `HALO_LOCAL_CLASSIFY_MODEL` | Model id in classify JSON body; default `astroware/Halo0.8B-guard-v1` |
+| `HALO_LOCAL_CLASSIFY_URL` | Local guard URL (required `host.docker.internal` when OpenClaw is in Docker); see [LOCAL-GUARD.md](../LOCAL-GUARD.md) |
+| `HALO_LOCAL_CLASSIFY_MODEL` | Classify body model id; default `astroware/Halo0.8B-guard-v1` |
 | `TRI_CHECK_REVEAL_CHUTES_KEY=1` | Log full Chutes key in verbose mode (avoid in shared logs) |
 | `TRISHOOL_EVAL_GROUND_TRUTH` | Path to `ground-truth.json` (default: `tri-claw/docker/eval-fixtures/…` under repo root) |
 | `TRI_CHECK_NO_GROUND_TRUTH=1` | Skip merging fixture ground truth; judge uses rubric JSON only |
@@ -233,9 +185,7 @@ Rows with missing/blank `prompt` are **skipped** (logged).
 - **`HTTP 401/403` from OpenClaw** — Check `OPENCLAW_GATEWAY_PASSWORD` / `OPENCLAW_GATEWAY_TOKEN` and URL.
 - **`HTTP 4xx/5xx` from Judge** — Confirm `JUDGE_URL` and judge auth (`X-Chutes-Api-Key` if your deployment expects it).
 - **`OpenClaw response missing choices[0].message.content`** — Gateway returned an unexpected JSON shape; use `--verbose` to inspect.
-- **`502` / `fetch failed` on eval with `--local`** — OpenClaw (in Docker) is calling `127.0.0.1:8000` inside the container, not your host. Set `HALO_LOCAL_CLASSIFY_URL=http://host.docker.internal:8000/v1/classify` in `tri-check/.env` and confirm `curl http://127.0.0.1:8000/health` on the host.
-- **Guard always `HARMLESS` locally** — Ensure you are on a current `serve_halo_guard.py` that applies the same classify prompting as [`scripts/qwen35_guard_runtime.py`](../scripts/qwen35_guard_runtime.py) (default guard system prompt, `Safety:` generation prefix, `enable_thinking=False` where supported).
-- **Hugging Face / proxy errors when starting the guard** — Use a cached model: `HALO_GUARD_LOCAL_FILES_ONLY=1` and/or `HF_HUB_OFFLINE=1` in the environment when running `docker-up.sh --local`, after the model files are present under `~/.cache/huggingface/hub/`.
+- **`--local` guard issues** (502, HARMLESS, Hub/proxy) — See **[../LOCAL-GUARD.md](../LOCAL-GUARD.md)** § Troubleshooting.
 
 ## License
 
