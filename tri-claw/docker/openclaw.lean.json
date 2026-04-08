@@ -1,5 +1,5 @@
 {
-  "version": "2.0.5",
+  "version": "2.0.6",
   "gateway": {
     "mode": "local",
     "port": 18789,
@@ -56,7 +56,7 @@
           "logDecisions": true,
           "policy": {
             "parseMode": "json_or_safety_label",
-            "evaluationFailureAction": "allow",
+            "evaluationFailureAction": "error",
             "unknownSafetyLabelAction": "allow",
             "allowLabels": ["safe", "controversial"],
             "blockLabels": ["unsafe"],
