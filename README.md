@@ -189,26 +189,9 @@ This brings up:
 - `tri-claw-openclaw-gateway-1` on port **18789**
 - `tri-judge-tri-judge-1` on port **8080**
 
-Optional **local Halo guard** (for `tri-check --local` / OpenClaw guard headers): `bash docker-up.sh --local` also starts [`scripts/serve_halo_guard.py`](scripts/serve_halo_guard.py) on the host (`0.0.0.0:8000` by default, model `astroware/Halo0.8B-guard-v1`). Logs: `logs/halo-guard.log`. PID file: `.halo-guard.pid`. Set `TRISHOOL_SKIP_LOCAL_HALO_GUARD=1` to skip guard startup even with `--local`. Override bind/port/model with `HALO_GUARD_BIND`, `HALO_GUARD_PORT`, `HALO_GUARD_MODEL`. See repo-root [`.env.example`](.env.example) for `HALO_GUARD_PYTHON`, `HALO_GUARD_LOCAL_FILES_ONLY`, `HALO_GUARD_ENABLE_XET`, and related toggles.
+Optional **local Halo guard:** `bash docker-up.sh --local` also starts [`scripts/serve_halo_guard.py`](scripts/serve_halo_guard.py) on the host (default `:8000`). See **[LOCAL-GUARD.md](LOCAL-GUARD.md)** for installation, `HALO_LOCAL_CLASSIFY_URL` when OpenClaw runs in Docker, and tri-check commands.
 
-**Prerequisites (host):** `pip install -r scripts/requirements-halo-guard.txt` in the Python you use. `docker-up.sh` searches PATH and common conda/pyenv paths for an interpreter that can `import torch, transformers`; set **`HALO_GUARD_PYTHON`** if the wrong `python3` is picked (e.g. Homebrew without torch). If startup fails, the script prints a tail of `logs/halo-guard.log`.
-
-**tri-check with `--local`:** Only the **guard** classify path goes local; the **agent** still uses Chutes via OpenClaw. You need a **tri-claw image built from this repo** so the gateway honors `X-Openclaw-Guard-*` headers. From `tri-check/`:
-
-```bash
-pnpm eval --question Q11 --prompt "Your prompt" --local
-pnpm guard-probe -- --query "Your prompt" --local
-```
-
-Because OpenClaw runs **inside Docker**, `127.0.0.1:8000` on the container is not the host. Set in **`tri-check/.env`** (and ensure repo-root `.env` does not override it):
-
-```bash
-HALO_LOCAL_CLASSIFY_URL=http://host.docker.internal:8000/v1/classify
-```
-
-On Linux, use the host’s LAN IP or [extra_hosts](https://docs.docker.com/desktop/features/host-gateway/) if you add `host.docker.internal`. Full detail: [tri-check/README.md](tri-check/README.md).
-
-Wait ~60 seconds for both services to be fully ready before running anything against them (local guard first run can take longer while weights download).
+Wait ~60 seconds for both services to be fully ready (first local guard run can take longer while weights download).
 
 ### Stop all agents
 
@@ -271,13 +254,9 @@ pnpm eval --submission data/example-submission.json
 pnpm eval --question Q1 --prompt "Hello"
 ```
 
-With a local guard server (e.g. `bash docker-up.sh --local`) and `HALO_LOCAL_CLASSIFY_URL` set for Docker as above:
+With a local guard, see **[LOCAL-GUARD.md](LOCAL-GUARD.md)** then e.g. `pnpm eval --question Q1 --prompt "Hello" --local`.
 
-```bash
-pnpm eval --question Q1 --prompt "Hello" --local
-```
-
-See [tri-check/README.md](tri-check/README.md) for batch JSON, `guard-probe`, ground-truth merge, and troubleshooting.
+See [tri-check/README.md](tri-check/README.md) for batch JSON, `guard-probe`, ground-truth merge, and general troubleshooting.
 
 ---
 
