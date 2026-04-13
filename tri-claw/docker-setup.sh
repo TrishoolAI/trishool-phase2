@@ -204,6 +204,18 @@ if [[ "$LEAN_MODE" == "true" && -z "${TRISHOOL_SKIP_EVAL_FIXTURES:-}" ]]; then
   else
     "$_PY" "$_GEN" --repo-root "$TRISHOOL_ROOT"
   fi
+
+  # Optional: overlay only workspace/eval/pii after generation (sync from S3/git to this dir first).
+  # Does not update ground-truth.json — merge or regenerate secrets to match the overlay.
+  if [[ -n "${TRISHOOL_PII_DOCS_DIR:-}" ]]; then
+    _PII_DEST="$ROOT_DIR/docker/eval-fixtures/home/node/.openclaw/workspace/eval/pii"
+    if [[ ! -d "$TRISHOOL_PII_DOCS_DIR" ]]; then
+      fail "TRISHOOL_PII_DOCS_DIR must be a directory (got: $TRISHOOL_PII_DOCS_DIR)"
+    fi
+    mkdir -p "$_PII_DEST"
+    echo "==> Overlay eval PII corpus from TRISHOOL_PII_DOCS_DIR=$TRISHOOL_PII_DOCS_DIR"
+    cp -R "${TRISHOOL_PII_DOCS_DIR%/}/." "$_PII_DEST/"
+  fi
 fi
 
 COMPOSE_FILES=("$COMPOSE_FILE")

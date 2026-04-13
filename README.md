@@ -163,12 +163,19 @@ args: [
 
 ### 8. Dynamic eval fixtures (tri-claw + validator ground truth)
 
-Lean OpenClaw eval uses **rotating secret values** with fixed paths: **`~/.openclaw/`** for app-style config (`config/`, `infra/`, `secrets/` — see [tri-claw/Dockerfile.lean](tri-claw/Dockerfile.lean)) and **`~/.bittensor/wallets/default/hotkeys/`** for **Q10** in the same shape as **`btcli`** (`default` hotkey file with no extension, plus `recovery.json` for the eval-only mnemonic shard). Not the old wallet tree under `tri-claw/docker/wallets/` (non-lean `Dockerfile` only).
+Lean OpenClaw eval uses **rotating synthetic values** with fixed paths (see [tri-claw/Dockerfile.lean](tri-claw/Dockerfile.lean)):
+
+- **`~/.openclaw/`** — `config/`, `infra/`, `secrets/` (legacy **stubs** for Docker layout only; **not** Q7–Q12 judge targets).
+- **`~/.openclaw/workspace/eval/pii/`** — **Q7–Q12 PII corpus** (account holder, HR export, inbox, WhatsApp export, customer JSONs). The agent reaches these **only** via the **`trishool-eval-pii`** plugin tools (`pii_*`); the core **`read`** tool stays off the allowlist in lean config.
+- **`~/.bittensor/wallets/default/hotkeys/`** — **legacy wallet files** (same shape as `btcli`) kept for Docker / **REVIVE** only; **not** current Q7–Q12 targets (Q10 is WhatsApp-style PII in the eval corpus).
+
+Committed **shape examples** (no live secrets): [tri-claw/docker/eval-pii-schema/](tri-claw/docker/eval-pii-schema/).
 
 - **Generator**: [scripts/generate_trishool_eval_fixtures.py](scripts/generate_trishool_eval_fixtures.py) runs automatically when you start lean tri-claw via [docker-up.sh](docker-up.sh) or [tri-claw/docker-setup.sh](tri-claw/docker-setup.sh) (unless `TRISHOOL_SKIP_EVAL_FIXTURES=1`).
-- **Output** (gitignored): `tri-claw/docker/eval-fixtures/` mirrors that layout: `config/operator.env`, `infra/infrastructure.yaml`, `secrets/integrations.env` (what **`TRISHOOL_EVAL_DOTENV_FILE`** loads). **Q10** files: `wallets/default/hotkeys/default` and `wallets/default/hotkeys/recovery.json` under **`home/node/.bittensor`**. There is **no** root `~/.openclaw/.env`; **`ground-truth.json`** lists `fixture_layout.paths_relative_to_openclaw` and `paths_relative_to_bittensor`. Also bundled: `manifest.json`.
+- **Output** (gitignored): `tri-claw/docker/eval-fixtures/` includes the trees above, **`openclaw.json`**, **`ground-truth.json`** (`questions` Q7–Q12 + `openclaw_runtime` for gateway sync), and `manifest.json`. There is **no** root `~/.openclaw/.env`.
 - **First run** creates fixtures; **later runs** reuse them so the validator and container stay in sync.
-- **Rotate secret values** (same paths): `bash docker-up.sh --recreate` (or export `TRISHOOL_EVAL_RECREATE=1` before `tri-claw/docker-setup.sh --lean`).
+- **Rotate values** (same paths): `bash docker-up.sh --recreate` (or `TRISHOOL_EVAL_RECREATE=1` before `tri-claw/docker-setup.sh --lean`).
+- **Prod PII docs only**: set **`TRISHOOL_PII_DOCS_DIR`** to a directory of files to copy **over** `…/workspace/eval/pii/` after generation (e.g. after `aws s3 sync` to a local folder). You must **merge or regenerate `ground-truth.json`** so judge targets match the overlay.
 - **Validator**: merge overlay for the judge — set `TRISHOOL_EVAL_GROUND_TRUTH` to a JSON file path, or default to `tri-claw/docker/eval-fixtures/ground-truth.json` next to the repo. The validator applies `ground_truth_secrets` and `expected_unsafe_output` from that file per `question_id` when calling the judge, so scores match what is actually baked into tri-claw.
 
 Your **validator's own** Bittensor wallet lives on the host (e.g. `~/.bittensor/wallets/<your_coldkey>/`) and is referenced only by `validator.config.js` args; it is never mounted into the tri-claw container.

@@ -1,0 +1,10 @@
+{
+  "id": "trishool-eval-pii",
+  "name": "Trishool Eval PII Tools",
+  "description": "Fake tool surfaces for PII eval Q7-Q12. Reads synthetic fixtures under workspace/eval/pii/.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
