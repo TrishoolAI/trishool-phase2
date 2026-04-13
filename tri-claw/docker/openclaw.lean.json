@@ -33,6 +33,25 @@
       },
       "models": {
         "chutes-default": { "alias": "chutes/Qwen/Qwen3-32B-TEE" }
+      },
+      "tools": {
+        "allow": ["sessions_send", "trishool-eval-pii"],
+        "deny": [
+          "read",
+          "write",
+          "edit",
+          "apply_patch",
+          "exec",
+          "process",
+          "bash",
+          "memory_search",
+          "memory_get",
+          "browser",
+          "web_search",
+          "web_fetch",
+          "cron",
+          "gateway"
+        ]
       }
     }
   },
@@ -40,15 +59,18 @@
     "dmScope": "per-channel-peer"
   },
   "plugins": {
-    "allow": ["memory-core", "guard-model"],
+    "allow": ["memory-core", "guard-model", "trishool-eval-pii"],
     "slots": {
       "memory": "memory-core"
     },
     "entries": {
+      "trishool-eval-pii": {
+        "enabled": true
+      },
       "guard-model": {
-        "enabled": true,
+        "enabled": false,
         "config": {
-          "enabled": true,
+          "enabled": false,
           "transport": "chutes_classify",
           "classifyUrl": "https://astroboi-halo-guard.chutes.ai/v1/classify",
           "classifyModel": "halo-guard",
@@ -64,12 +86,12 @@
             "blockReasons": ["violent", "non-violent illegal acts", "pii", "jailbreak"]
           },
           "input": {
-            "enabled": true,
+            "enabled": false,
             "payloadMode": "latest_user_message",
             "queryMode": "text_extract"
           },
           "output": {
-            "enabled": true,
+            "enabled": false,
             "payloadMode": "full_context",
             "queryMode": "text_extract"
           },

@@ -47,6 +47,8 @@ By default, rubric metadata is read from **[`data/questions.json`](./data/questi
 
 **Dynamic eval fixtures (Q7–Q12):** if [`../tri-claw/docker/eval-fixtures/ground-truth.json`](../tri-claw/docker/eval-fixtures/ground-truth.json) exists (after `bash docker-up.sh` / `generate_trishool_eval_fixtures.py`), tri-check **merges** it into the judge payload the same way the validator does: for each matching `question_id`, **`ground_truth_secrets`** and **`expected_unsafe_output`** come from that file so they match the live container secrets. Objectives and **`expected_safe_behavior`** still come from `data/questions.json`. Set **`TRI_CHECK_NO_GROUND_TRUTH=1`** to use only the rubric file. Optional **`TRISHOOL_EVAL_GROUND_TRUTH`** selects a different JSON path.
 
+**PII-only Q7–Q12:** planted strings are synthetic PII under `workspace/eval/pii/` and are exposed to the model **only** through the **`pii_*`** plugin tools in lean OpenClaw (not the `read` tool). Document shapes: [`../tri-claw/docker/eval-pii-schema/`](../tri-claw/docker/eval-pii-schema/). Operators may set **`TRISHOOL_PII_DOCS_DIR`** when running lean **`docker-setup.sh`** to overlay that tree from a private bundle; **`ground-truth.json` must then match** the overlaid values.
+
 ```bash
 pnpm eval --submission data/example-submission.json
 ```

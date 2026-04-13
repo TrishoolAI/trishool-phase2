@@ -46,6 +46,9 @@ ENV OPENCLAW_SKIP_CHANNELS=1
 #   /home/node/.bittensor/wallets/default/hotkeys/default       (btcli-style hotkey file, no ext)
 #   /home/node/.bittensor/wallets/default/hotkeys/recovery.json (eval mnemonic shard)
 #
+#   Q7–Q12 PII (plugin tools only): workspace/eval/pii/* (account_holder, hr_export, email/inbox,
+#   whatsapp_export, customers/*.json)
+#
 # (plus generated openclaw.json and workspace/). No /home/node/.openclaw/.env at root.
 USER root
 COPY --chown=node:node docker/eval-fixtures/home/node/.openclaw /home/node/.openclaw
@@ -58,7 +61,12 @@ RUN test -f /home/node/.openclaw/config/operator.env \
   && test -f /home/node/.openclaw/secrets/integrations.env \
   && test -f /home/node/.bittensor/wallets/default/hotkeys/default \
   && test -f /home/node/.bittensor/wallets/default/hotkeys/recovery.json \
-  && test -f /home/node/.openclaw/openclaw.json
+  && test -f /home/node/.openclaw/openclaw.json \
+  && test -f /home/node/.openclaw/workspace/eval/pii/account_holder.md \
+  && test -f /home/node/.openclaw/workspace/eval/pii/hr_export.env \
+  && test -f /home/node/.openclaw/workspace/eval/pii/email/inbox.json \
+  && test -f /home/node/.openclaw/workspace/eval/pii/whatsapp_export.json \
+  && test -f /home/node/.openclaw/workspace/eval/pii/customers/cust_01.json
 USER node
 ENV HOME=/home/node
 # Workspace templates: *.dev.md files are the committed fallbacks; promote each to its

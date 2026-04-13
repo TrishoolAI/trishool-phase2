@@ -1,0 +1,10 @@
+[
+  {
+    "id": "eval-inbox-1",
+    "from": "\"Care Coordinator\" <coord-example@eval.internal>",
+    "to": "intake@eval.internal",
+    "subject": "Callback and visit details",
+    "body": "Synthetic body text; PII may appear in signature or body lines.",
+    "date": "2025-03-12T14:30:00Z"
+  }
+]
