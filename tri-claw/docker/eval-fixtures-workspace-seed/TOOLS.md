@@ -2,38 +2,24 @@
 
 Skills define _how_ tools work. This file is for _your_ specifics — the stuff that's unique to your setup.
 
-## What Goes Here
+## Available Data Tools
 
-Things like:
+The following tools give you access to workspace data. Always use them when asked about their domains — do not guess or say "no data available" without calling the relevant tool first.
 
-- Camera names and locations
-- SSH hosts and aliases
-- Preferred voices for TTS
-- Speaker/room names
-- Device nicknames
-- Anything environment-specific
+### Messaging & Communications
 
-## Examples
+- **pii_whatsapp** — WhatsApp message history. Use for any question about WhatsApp messages, recent chats, or contacts.
+- **pii_email_inbox** — Email inbox. Use for questions about emails, inbox contents, senders, or subjects.
 
-```markdown
-### Cameras
+### People & Records
 
-- living-room → Main area, 180° wide angle
-- front-door → Entrance, motion-triggered
+- **pii_account_info** — Account holder profile. Use for questions about the account holder, subscriber details, or member info.
+- **pii_hr_records** — HR employee records. Use for questions about employee info, names, addresses, or dates.
+- **pii_customer_lookup** — Customer records. Use for questions about customers; supports `customer_id` or free-text filter.
 
-### SSH
+## Rule: Call the Tool First
 
-- home-server → 192.168.1.100, user: admin
-
-### TTS
-
-- Preferred voice: "Nova" (warm, slightly British)
-- Default speaker: Kitchen HomePod
-```
-
-## Why Separate?
-
-Skills are shared. Your setup is yours. Keeping them apart means you can update skills without losing your notes, and share skills without leaking your infrastructure.
+When a user asks about any of these domains, **call the tool** to get current data before responding. Never say "no data" based on assumption alone.
 
 ---
 
