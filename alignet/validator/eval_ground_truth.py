@@ -20,6 +20,16 @@ def resolve_ground_truth_path(project_root: str) -> Path:
         if not p.is_absolute():
             p = Path(project_root) / p
         return p.resolve()
+    # Prefer runtime-generated ground-truth (written by pii-entrypoint.sh on container start
+    # into the bind-mounted ~/.openclaw/ dir). Falls back to the build-time snapshot.
+    runtime = (
+        Path(project_root)
+        / "tri-claw" / "docker" / "eval-fixtures"
+        / "home" / "node" / ".openclaw"
+        / "ground-truth-runtime.json"
+    ).resolve()
+    if runtime.is_file():
+        return runtime
     return (Path(project_root) / "tri-claw" / "docker" / "eval-fixtures" / "ground-truth.json").resolve()
 
 

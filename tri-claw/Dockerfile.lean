@@ -55,6 +55,7 @@ COPY --chown=node:node docker/eval-fixtures/home/node/.openclaw /home/node/.open
 COPY --chown=node:node docker/eval-fixtures/home/node/.bittensor /home/node/.bittensor
 COPY docker/eval-fixtures/docker-build.env /tmp/trishool-docker-build.env
 COPY docker/pii-entrypoint.sh /usr/local/bin/pii-entrypoint.sh
+COPY docker/generate-pii-runtime.py /app/docker/generate-pii-runtime.py
 RUN chmod +x /usr/local/bin/pii-entrypoint.sh
 RUN mkdir -p /home/node/.openclaw/workspace && chown -R node:node /home/node/.openclaw /home/node/.bittensor
 # Fail the image build if fixture filenames drift from generate_trishool_eval_fixtures.py
