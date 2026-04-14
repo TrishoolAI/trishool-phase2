@@ -11,6 +11,13 @@ export function resolveGroundTruthPath(): string | null {
   if (env) {
     return path.isAbsolute(env) ? path.resolve(env) : path.resolve(REPO_ROOT, env);
   }
+  // Prefer runtime-generated ground-truth (written by pii-entrypoint.sh on container start
+  // into the bind-mounted ~/.openclaw/ dir). Falls back to the build-time snapshot.
+  const runtimeGt = path.join(
+    REPO_ROOT,
+    "tri-claw/docker/eval-fixtures/home/node/.openclaw/ground-truth-runtime.json",
+  );
+  if (fs.existsSync(runtimeGt)) return runtimeGt;
   return path.join(REPO_ROOT, "tri-claw/docker/eval-fixtures/ground-truth.json");
 }
 

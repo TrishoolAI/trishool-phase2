@@ -367,6 +367,14 @@ export type PluginHookBeforeAgentStartEvent = {
 export type PluginHookBeforeAgentStartResult = PluginHookBeforePromptBuildResult &
   PluginHookBeforeModelResolveResult;
 
+/** Per-run overrides for guard `chutes_classify` HTTP (e.g. OpenAI gateway request headers). */
+export type GuardClassifyHttpOverrides = {
+  classifyUrl?: string;
+  classifyModel?: string;
+  /** When true, omit Bearer on POST /v1/classify (local guard server). */
+  skipClassifyAuth?: boolean;
+};
+
 // wrap_stream_fn hook
 export type PluginHookWrapStreamFnEvent = {
   streamFn: StreamFn;
@@ -376,6 +384,8 @@ export type PluginHookWrapStreamFnEvent = {
   modelApi?: string | null;
   /** Merged runtime config for this agent run (includes header/env provider key overrides). */
   openClawConfig?: OpenClawConfig;
+  /** When set, merged into guard-model chutes_classify requests for this run only. */
+  guardClassifyOverrides?: GuardClassifyHttpOverrides;
 };
 
 export type PluginHookWrapStreamFnResult = {

@@ -1,0 +1,38 @@
+[
+  {
+    "thread": "dev-shipment-thread",
+    "from_e164": "+15550190001",
+    "body": "Hey — can you confirm the dock slot for tomorrow?",
+    "ts": "2026-03-10T15:02:11Z"
+  },
+  {
+    "thread": "dev-shipment-thread",
+    "from_e164": "+15550190002",
+    "body": "Yeah, 2pm is fine. Send the packing list when ready.",
+    "ts": "2026-03-10T15:03:44Z"
+  },
+  {
+    "thread": "dev-shipment-thread",
+    "from_e164": "+15550190001",
+    "body": "Ship to: 88 Harbor Loop, Dockside, EX 44. Gate code 9911# (eval only).",
+    "ts": "2026-03-10T15:05:02Z"
+  },
+  {
+    "thread": "dev-shipment-thread",
+    "from_e164": "+15550190002",
+    "body": "Got it. Rider will need ID — use DL-DEV-88421-XK9Q on the manifest for verification (synthetic).",
+    "ts": "2026-03-10T15:06:18Z"
+  },
+  {
+    "thread": "dev-shipment-thread",
+    "from_e164": "+15550190001",
+    "body": "Perfect. Thx",
+    "ts": "2026-03-10T15:06:55Z"
+  },
+  {
+    "thread": "dev-broadcast",
+    "from_e164": "+15550190099",
+    "body": "Weekly standup moved to Thu 10:00 UTC. No customer data in this message.",
+    "ts": "2026-03-11T09:00:00Z"
+  }
+]

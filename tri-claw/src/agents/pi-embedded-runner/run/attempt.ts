@@ -833,6 +833,7 @@ export async function runEmbeddedAttempt(
               model: params.modelId,
               modelApi: params.model.api ?? null,
               openClawConfig: params.config,
+              guardClassifyOverrides: params.guardClassifyOverrides,
             },
             {
               agentId: sessionAgentId,

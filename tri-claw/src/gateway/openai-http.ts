@@ -22,6 +22,7 @@ import { loadConfig } from "../config/config.js";
 import { resolveAgentIdForRequest, resolveSessionKey } from "./http-utils.js";
 import type { ResolvedGatewayChatCompletionsStateless } from "./chat-completions-stateless.js";
 import { collectGuardRefusalPrefixes, isGuardPolicyRefusalText } from "./openai-http-guard-refusal.js";
+import type { GuardClassifyHttpOverrides } from "../plugins/types.js";
 
 type OpenAiHttpOptions = {
   auth: ResolvedGatewayAuth;
@@ -51,6 +52,27 @@ type OpenAiChatCompletionRequest = {
 
 function writeSse(res: ServerResponse, data: unknown) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+function resolveGuardClassifyOverridesFromRequest(req: IncomingMessage): GuardClassifyHttpOverrides | undefined {
+  const rawLocal = req.headers["x-openclaw-guard-classify-local"];
+  const localVal = Array.isArray(rawLocal) ? rawLocal[0] : rawLocal;
+  const skipClassifyAuth = typeof localVal === "string" && localVal.trim() === "1";
+
+  const rawUrl = req.headers["x-openclaw-guard-classify-url"];
+  const classifyUrl = (typeof rawUrl === "string" ? rawUrl : rawUrl?.[0])?.trim();
+
+  const rawModel = req.headers["x-openclaw-guard-classify-model"];
+  const classifyModel = (typeof rawModel === "string" ? rawModel : rawModel?.[0])?.trim();
+
+  if (!skipClassifyAuth && !classifyUrl && !classifyModel) {
+    return undefined;
+  }
+  return {
+    skipClassifyAuth: skipClassifyAuth || undefined,
+    classifyUrl: classifyUrl || undefined,
+    classifyModel: classifyModel || undefined,
+  };
 }
 
 function resolveChutesApiKeyFromRequest(params: {
@@ -85,6 +107,7 @@ function buildAgentCommandInput(params: {
     mergeStatelessHttpDefaults: boolean;
     protectWorkspaceStateFiles?: boolean;
   };
+  guardClassifyOverrides?: GuardClassifyHttpOverrides;
 }) {
   return {
     message: params.prompt.message,
@@ -99,6 +122,12 @@ function buildAgentCommandInput(params: {
         providerApiKeyOverrides: params.providerApiKeyOverrides,
       }),
     ...(params.statelessHttp && { statelessHttp: params.statelessHttp }),
+    ...(params.guardClassifyOverrides &&
+      (params.guardClassifyOverrides.classifyUrl ||
+        params.guardClassifyOverrides.classifyModel ||
+        params.guardClassifyOverrides.skipClassifyAuth) && {
+        guardClassifyOverrides: params.guardClassifyOverrides,
+      }),
   };
 }
 
@@ -337,12 +366,14 @@ export async function handleOpenAiHttpRequest(
         protectWorkspaceStateFiles: st.protectWorkspaceStateFiles,
       }
     : undefined;
+  const guardClassifyOverrides = resolveGuardClassifyOverridesFromRequest(req);
   const commandInput = buildAgentCommandInput({
     prompt,
     sessionKey,
     runId,
     providerApiKeyOverrides,
     statelessHttp,
+    guardClassifyOverrides,
   });
 
   if (!stream) {

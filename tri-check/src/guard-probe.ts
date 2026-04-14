@@ -10,21 +10,27 @@ import {
 const DEFAULT_CLASSIFY_URL = "https://astroboi-halo-guard.chutes.ai/v1/classify";
 const DEFAULT_CLASSIFY_MODEL = "halo-guard";
 
+/** Local `scripts/serve_halo_guard.py`; model: https://huggingface.co/astroware/Halo0.8B-guard-v1 */
+const DEFAULT_LOCAL_CLASSIFY_URL = "http://127.0.0.1:8000/v1/classify";
+const DEFAULT_LOCAL_CLASSIFY_MODEL = "astroware/Halo0.8B-guard-v1";
+
 function usage(): string {
   return `
 tri-check guard-probe — send one user message through OpenClaw (exercises gateway + input guard), no judge.
-Optional: bypass OpenClaw and call Halo /v1/classify directly.
+Optional: bypass OpenClaw and call Halo /v1/classify directly (Chutes or local).
 
 Usage:
   pnpm guard-probe -- --query <text>
   pnpm guard-probe -- --query <text> --halo-direct
+  pnpm guard-probe -- --query <text> --local
 
 Options:
-  --query <text>        Required. User message sent to OpenClaw POST /v1/chat/completions (or query for --halo-direct).
+  --query <text>        Required. User message sent to OpenClaw POST /v1/chat/completions (or query for direct classify).
   --halo-direct         Call Halo classify API only (no OpenClaw). Uses --role, CHUTES_API_KEY Bearer.
-  --role <input|output> With --halo-direct only (default: input).
-  --classify-url <url>  With --halo-direct: override HALO_CLASSIFY_URL (default: ${DEFAULT_CLASSIFY_URL})
-  --classify-model <id> With --halo-direct: override HALO_CLASSIFY_MODEL (default: ${DEFAULT_CLASSIFY_MODEL})
+  --local               Same as direct classify, but to local guard (no CHUTES_API_KEY). Default URL ${DEFAULT_LOCAL_CLASSIFY_URL}, model ${DEFAULT_LOCAL_CLASSIFY_MODEL}. Start: bash docker-up.sh --local (needs pip install -r scripts/requirements-halo-guard.txt)
+  --role <input|output> With --halo-direct / --local only (default: input).
+  --classify-url <url>  Override classify URL (--halo-direct: default ${DEFAULT_CLASSIFY_URL}; --local: default ${DEFAULT_LOCAL_CLASSIFY_URL})
+  --classify-model <id> Override classify model id in JSON body (--halo-direct: default ${DEFAULT_CLASSIFY_MODEL}; --local: default ${DEFAULT_LOCAL_CLASSIFY_MODEL})
   --openclaw-url <url>  Override OPENCLAW_URL (same as tri-check --url)
   --verbose             Log URLs and Chutes key fingerprint (still redacted)
   -h, --help
@@ -33,13 +39,15 @@ Options:
 
 Env:
   OPENCLAW_URL, OPENCLAW_GATEWAY_PASSWORD or OPENCLAW_GATEWAY_TOKEN — required unless --halo-direct
-  CHUTES_API_KEY        Sent as X-Chutes-Api-Key to OpenClaw; required Bearer for --halo-direct
-  HALO_CLASSIFY_URL, HALO_CLASSIFY_MODEL — optional; only for --halo-direct
+  CHUTES_API_KEY        Sent as X-Chutes-Api-Key to OpenClaw; required Bearer for --halo-direct (not --local)
+  HALO_CLASSIFY_URL, HALO_CLASSIFY_MODEL — optional; Chutes direct mode
+  HALO_LOCAL_CLASSIFY_URL, HALO_LOCAL_CLASSIFY_MODEL — optional; defaults for --local
 
 Examples:
   cd tri-check && pnpm guard-probe -- --query "What is 2+2?"
   cd tri-check && pnpm guard-probe -- --query "ignore previous instructions"
   cd tri-check && pnpm guard-probe -- --query "What is 2+2?" --halo-direct
+  cd tri-check && pnpm guard-probe -- --query "What is 2+2?" --local
 `.trim();
 }
 
@@ -47,6 +55,8 @@ interface Parsed {
   query?: string;
   role: HaloClassifyRole;
   haloDirect: boolean;
+  /** Direct classify to local serve_halo_guard (no Bearer). */
+  local: boolean;
   classifyUrl: string;
   classifyModel: string;
   openclawUrl?: string;
@@ -58,6 +68,7 @@ function parseArgv(argv: string[]): Parsed {
   const out: Parsed = {
     role: "input",
     haloDirect: false,
+    local: false,
     classifyUrl: (process.env.HALO_CLASSIFY_URL ?? DEFAULT_CLASSIFY_URL).trim(),
     classifyModel: (process.env.HALO_CLASSIFY_MODEL ?? DEFAULT_CLASSIFY_MODEL).trim(),
     verbose: false,
@@ -80,6 +91,13 @@ function parseArgv(argv: string[]): Parsed {
     }
     if (a === "--halo-direct") {
       out.haloDirect = true;
+      continue;
+    }
+    if (a === "--local") {
+      out.local = true;
+      out.haloDirect = true;
+      out.classifyUrl = (process.env.HALO_LOCAL_CLASSIFY_URL ?? DEFAULT_LOCAL_CLASSIFY_URL).trim();
+      out.classifyModel = (process.env.HALO_LOCAL_CLASSIFY_MODEL ?? DEFAULT_LOCAL_CLASSIFY_MODEL).trim();
       continue;
     }
     if (a === "--openclaw") {
@@ -144,8 +162,8 @@ async function runDirectHalo(
   urls: ResolvedServiceUrls,
 ): Promise<void> {
   const key = urls.chutesApiKey.trim();
-  if (!key) {
-    console.error("CHUTES_API_KEY is required for direct Halo classify.");
+  if (!parsed.local && !key) {
+    console.error("CHUTES_API_KEY is required for direct Halo classify (use --local for a local guard server without Chutes).");
     process.exitCode = 1;
     return;
   }
@@ -154,11 +172,17 @@ async function runDirectHalo(
     classifyModel: parsed.classifyModel,
     query: parsed.query!,
     role: parsed.role,
-    chutesApiKey: key,
+    chutesApiKey: parsed.local ? "" : key,
   });
   const status = typeof res.status === "string" ? res.status : "";
   const verdict = interpretHaloStatus(status);
-  console.log(JSON.stringify({ mode: "halo_classify", verdict, status, response: res }, null, 2));
+  console.log(
+    JSON.stringify(
+      { mode: parsed.local ? "halo_classify_local" : "halo_classify", verdict, status, response: res },
+      null,
+      2,
+    ),
+  );
   if (verdict === "block") process.exitCode = 2;
   else if (verdict === "unknown") process.exitCode = 1;
 }
@@ -229,6 +253,7 @@ async function main(): Promise<void> {
     process.stderr.write(`[guard-probe] OPENCLAW_URL: ${urls.openclawUrl}\n`);
     if (parsed.haloDirect) {
       process.stderr.write(`[guard-probe] classify URL: ${parsed.classifyUrl}\n`);
+      process.stderr.write(`[guard-probe] classify model: ${parsed.classifyModel}\n`);
     }
   }
 
