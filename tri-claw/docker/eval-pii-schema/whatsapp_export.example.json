@@ -1,0 +1,8 @@
+[
+  {
+    "thread": "eval-shipment",
+    "from_e164": "+15550001001",
+    "body": "Synthetic message body; may include address or ID-style strings.",
+    "ts": "2025-03-11T09:15:00Z"
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "name": "@openclaw/trishool-eval-pii",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Fake PII tool surfaces for Trishool Q7-Q12 eval (no real messaging)",
+  "type": "module",
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  }
+}

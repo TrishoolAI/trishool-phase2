@@ -1,6 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import { DEFAULT_QUESTIONS_PATH, loadEnvFiles, resolveServiceUrls, TRI_CHECK_ROOT } from "./env.js";
+import {
+  DEFAULT_LOCAL_GUARD_CLASSIFY_URL,
+  DEFAULT_QUESTIONS_PATH,
+  loadEnvFiles,
+  resolveServiceUrls,
+  TRI_CHECK_ROOT,
+} from "./env.js";
 import { collectFixtureRedactStrings, loadGroundTruthQuestionsById } from "./groundTruth.js";
 import { writeReportFile } from "./io.js";
 import { logChutesKey, printRunSummary, runDirect, runFromSubmission } from "./run.js";
@@ -23,6 +29,7 @@ Options:
   --openclaw-url <url> Override OPENCLAW_URL
   --judge-url <url>    Override JUDGE_URL
   --out <path>         Write JSON report to this path
+  --local              Use local Halo guard only (OpenClaw still runs agent on Chutes); set HALO_LOCAL_CLASSIFY_URL if gateway is in Docker
   --verbose            Extra stderr diagnostics (redact secrets by default)
   -h, --help           Show this help
 
@@ -57,11 +64,12 @@ interface ParsedCli {
   judgeUrl?: string;
   out?: string;
   verbose: boolean;
+  localGuard: boolean;
   help: boolean;
 }
 
 function parseCli(argv: string[]): ParsedCli {
-  const out: ParsedCli = { verbose: false, help: false };
+  const out: ParsedCli = { verbose: false, localGuard: false, help: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     const take = () => {
@@ -76,6 +84,10 @@ function parseCli(argv: string[]): ParsedCli {
     }
     if (a === "--verbose") {
       out.verbose = true;
+      continue;
+    }
+    if (a === "--local") {
+      out.localGuard = true;
       continue;
     }
     if (a === "--submission") {
@@ -179,11 +191,23 @@ async function main(): Promise<void> {
     judgeUrl: urls.judgeUrl,
     urls,
     verbose: parsed.verbose,
+    localGuard: parsed.localGuard,
     groundTruthById,
     fixtureRedact,
   };
 
   logChutesKey(urls);
+  if (parsed.localGuard) {
+    const classifyUrl = (process.env.HALO_LOCAL_CLASSIFY_URL ?? DEFAULT_LOCAL_GUARD_CLASSIFY_URL).trim();
+    process.stderr.write(
+      `[tri-check] --local: OpenClaw will POST guard classify to ${classifyUrl} (this URL is fetched from the OpenClaw gateway process, not from tri-check).\n`,
+    );
+    if (classifyUrl.includes("127.0.0.1") || classifyUrl.includes("localhost")) {
+      process.stderr.write(
+        `[tri-check] If OpenClaw runs in Docker and you see OpenClaw HTTP 502 "fetch failed", set HALO_LOCAL_CLASSIFY_URL=http://host.docker.internal:8000/v1/classify (Mac/Win Docker Desktop) so the container can reach the host guard.\n`,
+      );
+    }
+  }
 
   const hasSubmission = Boolean(parsed.submission);
   const hasDirect = Boolean(parsed.question || parsed.prompt);

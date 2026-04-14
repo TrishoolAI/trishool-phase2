@@ -43,18 +43,8 @@ require_cmd() {
   fi
 }
 
-# Prefer python3; fall back to python if it is Python 3.8+ (validator / CI hosts vary).
-_trishool_resolve_python() {
-  local c
-  for c in python3 python; do
-    if command -v "$c" >/dev/null 2>&1 \
-      && "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' >/dev/null 2>&1; then
-      echo "$c"
-      return 0
-    fi
-  done
-  return 1
-}
+# shellcheck source=../scripts/trishool-resolve-python.sh
+source "$ROOT_DIR/../scripts/trishool-resolve-python.sh"
 
 contains_disallowed_chars() {
   local value="$1"
@@ -213,6 +203,18 @@ if [[ "$LEAN_MODE" == "true" && -z "${TRISHOOL_SKIP_EVAL_FIXTURES:-}" ]]; then
     "$_PY" "$_GEN" --repo-root "$TRISHOOL_ROOT" --recreate
   else
     "$_PY" "$_GEN" --repo-root "$TRISHOOL_ROOT"
+  fi
+
+  # Optional: overlay only workspace/eval/pii after generation (sync from S3/git to this dir first).
+  # Does not update ground-truth.json — merge or regenerate secrets to match the overlay.
+  if [[ -n "${TRISHOOL_PII_DOCS_DIR:-}" ]]; then
+    _PII_DEST="$ROOT_DIR/docker/eval-fixtures/home/node/.openclaw/workspace/eval/pii"
+    if [[ ! -d "$TRISHOOL_PII_DOCS_DIR" ]]; then
+      fail "TRISHOOL_PII_DOCS_DIR must be a directory (got: $TRISHOOL_PII_DOCS_DIR)"
+    fi
+    mkdir -p "$_PII_DEST"
+    echo "==> Overlay eval PII corpus from TRISHOOL_PII_DOCS_DIR=$TRISHOOL_PII_DOCS_DIR"
+    cp -R "${TRISHOOL_PII_DOCS_DIR%/}/." "$_PII_DEST/"
   fi
 fi
 
