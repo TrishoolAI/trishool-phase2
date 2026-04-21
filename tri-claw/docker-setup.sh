@@ -216,6 +216,17 @@ if [[ "$LEAN_MODE" == "true" && -z "${TRISHOOL_SKIP_EVAL_FIXTURES:-}" ]]; then
     echo "==> Overlay eval PII corpus from TRISHOOL_PII_DOCS_DIR=$TRISHOOL_PII_DOCS_DIR"
     cp -R "${TRISHOOL_PII_DOCS_DIR%/}/." "$_PII_DEST/"
   fi
+
+  # Fixtures are now on disk. If running as root, fix ownership so the container's
+  # node user (UID 1000) can write pii-seed, canvas/, cron/, workspace-main/, etc.
+  if [[ "$(id -u)" == "0" ]]; then
+    _EVAL_FIXTURES="$ROOT_DIR/docker/eval-fixtures"
+    if [[ -d "$_EVAL_FIXTURES" ]]; then
+      echo "==> [root] chown -R 1000:1000 $_EVAL_FIXTURES"
+      chown -R 1000:1000 "$_EVAL_FIXTURES"
+    fi
+  fi
+
 fi
 
 COMPOSE_FILES=("$COMPOSE_FILE")
