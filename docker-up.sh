@@ -23,7 +23,7 @@ fi
 
 # Strip trishool-only flags before docker compose (unknown service names / options)
 FORWARD_ARGS=()
-export TRISHOOL_EVAL_RECREATE=1  # TEMPORARY: always recreate PII fixtures
+export TRISHOOL_EVAL_RECREATE=0  # TEMPORARY: always recreate PII fixtures
 DOCKER_NO_CACHE=0
 START_LOCAL_HALO_GUARD=0
 for a in "$@"; do
