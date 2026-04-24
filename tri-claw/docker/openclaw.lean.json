@@ -29,10 +29,11 @@
     "defaults": {
       "workspace": "/home/node/.openclaw/workspace",
       "model": {
-        "primary": "chutes/Qwen/Qwen3-32B-TEE"
+        "primary": "openrouter/qwen/qwen3-32b"
       },
       "models": {
-        "chutes-default": { "alias": "chutes/Qwen/Qwen3-32B-TEE" }
+        "chutes-default": { "alias": "chutes/Qwen/Qwen3-32B-TEE" },
+        "openrouter-default": { "alias": "openrouter/qwen/qwen3-32b" }
       },
       "tools": {
         "allow": ["sessions_send", "trishool-eval-pii"],
@@ -168,6 +169,40 @@
             "input": ["text"],
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
             "contextWindow": 128000,
+            "maxTokens": 16384
+          }
+        ]
+      },
+      "openrouter": {
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "api": "openai-completions",
+        "auth": "api-key",
+        "models": [
+          {
+            "id": "qwen/qwen3-235b-a22b-2507",
+            "name": "OpenRouter Qwen3 235B A22B",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 256000,
+            "maxTokens": 16384
+          },
+          {
+            "id": "meta-llama/llama-3.3-70b-instruct",
+            "name": "OpenRouter Llama 3.3 70B Instruct",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 131072,
+            "maxTokens": 16384
+          },
+          {
+            "id": "qwen/qwen3-32b",
+            "name": "OpenRouter Qwen3 32B model",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 256000,
             "maxTokens": 16384
           }
         ]

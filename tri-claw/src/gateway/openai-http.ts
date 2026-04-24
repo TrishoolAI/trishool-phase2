@@ -46,7 +46,9 @@ type OpenAiChatCompletionRequest = {
   user?: unknown;
   /** Per-request Chutes API key (ephemeral auth; not loaded from .env). */
   chutes_api_key?: unknown;
-  /** Per-request provider API keys: { chutes?: string, ... }. */
+  /** Per-request OpenRouter API key (ephemeral auth; not loaded from .env). */
+  openrouter_api_key?: unknown;
+  /** Per-request provider API keys: { chutes?: string, openrouter?: string, ... }. */
   provider_api_keys?: unknown;
 };
 
@@ -95,6 +97,44 @@ function resolveChutesApiKeyFromRequest(params: {
     if (chutesStr) return chutesStr;
   }
   return undefined;
+}
+
+function resolveOpenrouterApiKeyFromRequest(params: {
+  headers: IncomingMessage["headers"];
+  body: OpenAiChatCompletionRequest;
+}): string | undefined {
+  const headerKey = params.headers["x-openrouter-api-key"];
+  const fromHeader =
+    typeof headerKey === "string" ? headerKey.trim() : Array.isArray(headerKey) ? headerKey[0]?.trim() : undefined;
+  if (fromHeader) return fromHeader;
+  const fromBody = params.body.openrouter_api_key;
+  const bodyStr =
+    typeof fromBody === "string" ? fromBody.trim() : fromBody != null ? String(fromBody).trim() : undefined;
+  if (bodyStr) return bodyStr;
+  const providerKeys = params.body.provider_api_keys;
+  if (providerKeys && typeof providerKeys === "object" && !Array.isArray(providerKeys)) {
+    const openrouter = (providerKeys as Record<string, unknown>).openrouter;
+    const orStr =
+      typeof openrouter === "string"
+        ? openrouter.trim()
+        : openrouter != null
+          ? String(openrouter).trim()
+          : undefined;
+    if (orStr) return orStr;
+  }
+  return undefined;
+}
+
+function resolveProviderApiKeyOverridesFromRequest(params: {
+  headers: IncomingMessage["headers"];
+  body: OpenAiChatCompletionRequest;
+}): Record<string, string> | undefined {
+  const chutes = resolveChutesApiKeyFromRequest(params);
+  const openrouter = resolveOpenrouterApiKeyFromRequest(params);
+  const out: Record<string, string> = {};
+  if (chutes) out.chutes = chutes;
+  if (openrouter) out.openrouter = openrouter;
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function buildAgentCommandInput(params: {
@@ -355,9 +395,10 @@ export async function handleOpenAiHttpRequest(
   }
 
   const runId = `chatcmpl_${randomUUID()}`;
-  const chutesKey = resolveChutesApiKeyFromRequest({ headers: req.headers, body: payload });
-  const providerApiKeyOverrides =
-    chutesKey != null && chutesKey.length > 0 ? { chutes: chutesKey } : undefined;
+  const providerApiKeyOverrides = resolveProviderApiKeyOverridesFromRequest({
+    headers: req.headers,
+    body: payload,
+  });
   const deps = createDefaultDeps();
   const statelessHttp = st?.enabled
     ? {
