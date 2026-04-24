@@ -50,6 +50,34 @@ function parseModelChain(record: Record<string, unknown>, ctx: string): string[]
   return [model];
 }
 
+/** Legacy flat `judge.baseURL` / `judge.models`, or `judge.provider` + `judge.providers.<id>`. */
+function resolveJudgeUpstream(judge: Record<string, unknown>): {
+  baseURL: string;
+  modelChain: string[];
+} {
+  const providersRaw = judge.providers;
+  if (providersRaw === undefined) {
+    return {
+      baseURL: requireString(judge, "baseURL", "judge"),
+      modelChain: parseModelChain(judge, "judge"),
+    };
+  }
+  if (!isRecord(providersRaw)) {
+    throw new ConfigError("Missing or invalid judge.providers.");
+  }
+
+  const providerId = requireString(judge, "provider", "judge");
+  const branch = providersRaw[providerId];
+  if (!isRecord(branch)) {
+    throw new ConfigError(`Missing or invalid judge.providers.${providerId}.`);
+  }
+  const ctx = `judge.providers.${providerId}`;
+  return {
+    baseURL: requireString(branch, "baseURL", ctx),
+    modelChain: parseModelChain(branch, ctx),
+  };
+}
+
 export function resolveConfigPath(env: NodeJS.ProcessEnv): string {
   return resolve(env.JUDGE_CONFIG_PATH ?? DEFAULT_CONFIG_PATH);
 }
@@ -87,7 +115,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new ConfigError("Missing or invalid judge config.");
   }
 
-  const modelChain = parseModelChain(judge, "judge");
+  const upstream = resolveJudgeUpstream(judge);
+  const modelChain = upstream.modelChain;
 
   const rootVersion =
     typeof parsed.version === "string" && parsed.version.trim().length > 0
@@ -101,7 +130,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       port: requireNumber(server, "port", "server"),
     },
     judge: {
-      baseURL: requireString(judge, "baseURL", "judge"),
+      baseURL: upstream.baseURL,
       models: modelChain,
       model: modelChain[0],
       timeoutMs: requireNumber(judge, "timeoutMs", "judge"),

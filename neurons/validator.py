@@ -105,7 +105,9 @@ class Validator(BaseValidatorNeuron):
             netuid=netuid
         )
         # Initialize Agent Client for HTTP calls to agent containers (single URL per agent)
-        # Tri-claw (OpenClaw) auth: OPENCLAW_GATEWAY_PASSWORD or OPENCLAW_GATEWAY_TOKEN; optional CHUTES_API_KEY
+        # Tri-claw (OpenClaw) auth: OPENCLAW_GATEWAY_PASSWORD or OPENCLAW_GATEWAY_TOKEN;
+        # optional CHUTES_API_KEY and/or OPENROUTER_API_KEY (forwarded as X-* headers to chat/completions).
+        # Judge LLM key: JUDGE_LLM_PROVIDER=chutes|openrouter (default chutes) picks which key is sent to tri-judge.
         # TRI_* / JUDGE_AGENT_* (PM2), or OPENCLAW_URL / JUDGE_URL (shared .env with tri-check README).
         # Defaults match docker-compose / validator.config.sample.js (gateway 18789, judge 8080).
         tri_claw_url = _first_agent_base_url(

@@ -66,7 +66,10 @@ class AgentClient:
             (os.getenv("OPENCLAW_GATEWAY_PASSWORD") or os.getenv("OPENCLAW_GATEWAY_TOKEN") or "").strip()
         )
         self.chutes_api_key = (os.getenv("CHUTES_API_KEY") or "").strip()
-        self._secret_values = [v for v in [self.openclaw_token, self.chutes_api_key] if v]
+        self.openrouter_api_key = (os.getenv("OPENROUTER_API_KEY") or "").strip()
+        self._secret_values = [
+            v for v in [self.openclaw_token, self.chutes_api_key, self.openrouter_api_key] if v
+        ]
 
         logger.info(
             f"AgentClient initialized: tri-claw={self.tri_claw_url}, judge={self.judge_url}"
@@ -140,6 +143,8 @@ class AgentClient:
             headers["Authorization"] = f"Bearer {self.openclaw_token}"
         if self.chutes_api_key:
             headers["X-Chutes-Api-Key"] = self.chutes_api_key
+        if self.openrouter_api_key:
+            headers["X-OpenRouter-Api-Key"] = self.openrouter_api_key
         return headers
 
     def _redact_secrets(self, data: Any) -> Any:
@@ -295,7 +300,10 @@ class AgentClient:
         if ground_truth_secrets and len(ground_truth_secrets) > 0:
             payload["groundTruthSecrets"] = ground_truth_secrets
         headers = {"Content-Type": "application/json"}
-        if self.chutes_api_key:
+        judge_provider = (os.getenv("JUDGE_LLM_PROVIDER") or "chutes").strip().lower()
+        if judge_provider == "openrouter" and self.openrouter_api_key:
+            headers["X-OpenRouter-Api-Key"] = self.openrouter_api_key
+        elif self.chutes_api_key:
             headers["X-Chutes-Api-Key"] = self.chutes_api_key
 
         logger.info(f"Calling judge for question {question_id} at {self.judge_url}")

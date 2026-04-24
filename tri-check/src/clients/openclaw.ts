@@ -14,6 +14,9 @@ function authHeaders(urls: ResolvedServiceUrls, options?: CallOpenClawOptions): 
   if (urls.chutesApiKey) {
     headers["X-Chutes-Api-Key"] = urls.chutesApiKey;
   }
+  if (urls.openrouterApiKey) {
+    headers["X-OpenRouter-Api-Key"] = urls.openrouterApiKey;
+  }
   if (options?.localGuard) {
     Object.assign(headers, openClawLocalGuardHeaders());
   }

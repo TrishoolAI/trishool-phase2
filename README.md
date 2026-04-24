@@ -76,7 +76,7 @@ pnpm install
 cp .env.example .env
 ```
 
-Edit `tri-check/.env`: `OPENCLAW_URL`, `JUDGE_URL`, gateway password (must match `.env.tri-claw`), and `CHUTES_API_KEY` for the agent on Chutes. See [tri-check/README.md](tri-check/README.md) for commands, batch mode, and guard probe.
+Edit `tri-check/.env`: `OPENCLAW_URL`, `JUDGE_URL`, gateway password (must match `.env.tri-claw`), and provider keys as needed. See **[docs/chutes-and-openrouter.md](docs/chutes-and-openrouter.md)** for Chutes + OpenRouter in one place, [tri-check/README.md](tri-check/README.md) for commands, batch mode, and guard probe.
 
 ### 5. Local Halo guard (optional — `docker-up.sh --local`)
 

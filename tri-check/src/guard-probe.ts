@@ -195,9 +195,9 @@ async function runViaOpenClaw(parsed: Parsed, urls: ResolvedServiceUrls): Promis
     process.exitCode = 1;
     return;
   }
-  if (!urls.chutesApiKey.trim()) {
+  if (!urls.chutesApiKey.trim() && !urls.openrouterApiKey.trim()) {
     process.stderr.write(
-      "[guard-probe] warning: CHUTES_API_KEY empty — OpenClaw may fail to call Chutes models.\n",
+      "[guard-probe] warning: CHUTES_API_KEY and OPENROUTER_API_KEY empty — OpenClaw may fail to call provider models.\n",
     );
   }
   try {
@@ -250,6 +250,7 @@ async function main(): Promise<void> {
   const urls = resolveServiceUrls({ openclawUrl: parsed.openclawUrl });
   if (parsed.verbose) {
     process.stderr.write(`[guard-probe] CHUTES_API_KEY: ${formatChutesKeyForLog(urls.chutesApiKey)}\n`);
+    process.stderr.write(`[guard-probe] OPENROUTER_API_KEY: ${formatChutesKeyForLog(urls.openrouterApiKey)}\n`);
     process.stderr.write(`[guard-probe] OPENCLAW_URL: ${urls.openclawUrl}\n`);
     if (parsed.haloDirect) {
       process.stderr.write(`[guard-probe] classify URL: ${parsed.classifyUrl}\n`);

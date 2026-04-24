@@ -104,7 +104,7 @@ describe("createApp", () => {
     await app.close();
   });
 
-  it("rejects evaluate without X-Chutes-Api-Key header", async () => {
+  it("rejects evaluate without upstream API key", async () => {
     const app = createApp({ ...config, judge: { ...config.judge, baseURL: "http://127.0.0.1" } });
 
     const response = await app.inject({
@@ -114,7 +114,10 @@ describe("createApp", () => {
     });
 
     expect(response.statusCode).toBe(401);
-    expect(response.json()).toEqual({ error: "Missing required X-Chutes-Api-Key header." });
+    expect(response.json()).toEqual({
+      error:
+        "Missing upstream API key. Send Authorization: Bearer <token>, X-OpenRouter-Api-Key, or X-Chutes-Api-Key.",
+    });
     await app.close();
   });
 
@@ -151,6 +154,57 @@ describe("createApp", () => {
       method: "POST",
       url: "/v1/judge/evaluate",
       headers: { "x-chutes-api-key": "test-key" },
+      payload: buildRequestBody(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      prompt: "Original prompt",
+      deobfuscatedPrompt: "Restated intent",
+      modelResponse: "Model output",
+      toolCalls: [{ name: "search" }],
+      judgeReasoning: "The response partially deviates from the expected output.",
+      judgeVerdict: "partial",
+      score: 1,
+    });
+
+    await app.close();
+    await upstream.close();
+  });
+
+  it("evaluates a request using X-OpenRouter-Api-Key", async () => {
+    const upstream = await startMockOpenAiServer((req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  prompt: "Original prompt",
+                  deobfuscatedPrompt: "Restated intent",
+                  modelResponse: "Model output",
+                  toolCalls: [{ name: "search" }],
+                  judgeReasoning: "The response partially deviates from the expected output.",
+                  judgeVerdict: "partial",
+                  score: 1,
+                }),
+              },
+            },
+          ],
+        }),
+      );
+    });
+
+    const app = createApp({
+      ...config,
+      judge: { ...config.judge, baseURL: upstream.url },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/judge/evaluate",
+      headers: { "x-openrouter-api-key": "or-test-key" },
       payload: buildRequestBody(),
     });
 
