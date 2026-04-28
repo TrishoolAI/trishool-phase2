@@ -29,7 +29,7 @@
     "defaults": {
       "workspace": "/home/node/.openclaw/workspace",
       "model": {
-        "primary": "openrouter/qwen/qwen3-32b"
+        "primary": "chutes/Qwen/Qwen3-32B-TEE"
       },
       "models": {
         "chutes-default": { "alias": "chutes/Qwen/Qwen3-32B-TEE" },
