@@ -32,7 +32,7 @@ From the **repo root**:
 cd tri-check
 pnpm install
 cp .env.example .env
-# Edit .env: OPENCLAW_URL, JUDGE_URL, gateway password/token, optional CHUTES_API_KEY
+# Edit .env: OPENCLAW_URL, JUDGE_URL, gateway password/token, CHUTES_API_KEY / OPENROUTER_API_KEY / JUDGE_LLM_PROVIDER as needed — see ../docs/chutes-and-openrouter.md
 ```
 
 Ensure OpenClaw and Judge are reachable at those URLs (e.g. Docker stack from this repo).
