@@ -5,7 +5,7 @@
     "port": 8080
   },
   "judge": {
-    "provider": "openrouter",
+    "provider": "chutes",
     "providers": {
       "chutes": {
         "baseURL": "https://llm.chutes.ai/v1",
