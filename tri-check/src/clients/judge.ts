@@ -2,8 +2,21 @@ import { requestJson } from "../http.js";
 import type { ResolvedServiceUrls } from "../env.js";
 import type { JudgeResult } from "../types.js";
 
-function chutesHeader(urls: ResolvedServiceUrls): Record<string, string> {
-  if (!urls.chutesApiKey) return {};
+/**
+ * Judge upstream auth: matches `judge.provider` in tri-judge config via `JUDGE_LLM_PROVIDER`
+ * (`chutes` default, or `openrouter`). OpenClaw may still use both keys independently.
+ */
+function judgeAuthHeaders(urls: ResolvedServiceUrls): Record<string, string> {
+  const provider = (process.env.JUDGE_LLM_PROVIDER ?? "chutes").trim().toLowerCase();
+  if (provider === "openrouter") {
+    if (!urls.openrouterApiKey) {
+      return {};
+    }
+    return { "X-OpenRouter-Api-Key": urls.openrouterApiKey };
+  }
+  if (!urls.chutesApiKey) {
+    return {};
+  }
   return { "X-Chutes-Api-Key": urls.chutesApiKey };
 }
 
@@ -45,7 +58,7 @@ export async function callJudge(
     judgeVerdict?: string;
     score?: number;
     judgeReasoning?: string;
-  }>("POST", url, body, chutesHeader(urls));
+  }>("POST", url, body, judgeAuthHeaders(urls));
   return {
     judgeVerdict: res?.judgeVerdict,
     score: typeof res?.score === "number" ? res.score : 0,

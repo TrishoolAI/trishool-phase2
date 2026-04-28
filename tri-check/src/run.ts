@@ -398,8 +398,11 @@ export function printRunSummary(report: CliOutputReport): void {
 export function logChutesKey(urls: ResolvedServiceUrls): void {
   if (process.env.TRI_CHECK_REVEAL_CHUTES_KEY === "1" || process.env.EVAL_REVEAL_CHUTES_KEY === "1") {
     process.stderr.write(
-      "[tri-check] TRI_CHECK_REVEAL_CHUTES_KEY/EVAL_REVEAL_CHUTES_KEY=1: full X-Chutes-Api-Key may appear in verbose logs.\n",
+      "[tri-check] TRI_CHECK_REVEAL_CHUTES_KEY/EVAL_REVEAL_CHUTES_KEY=1: full provider API keys may appear in verbose logs.\n",
     );
   }
-  process.stderr.write(`[tri-check] X-Chutes-Api-Key will send: ${formatChutesKeyForLog(urls.chutesApiKey)}\n`);
+  const judgeProvider = (process.env.JUDGE_LLM_PROVIDER ?? "chutes").trim() || "chutes";
+  process.stderr.write(`[tri-check] JUDGE_LLM_PROVIDER=${judgeProvider} (judge uses Chutes vs OpenRouter key)\n`);
+  process.stderr.write(`[tri-check] X-Chutes-Api-Key (OpenClaw + judge when provider=chutes): ${formatChutesKeyForLog(urls.chutesApiKey)}\n`);
+  process.stderr.write(`[tri-check] X-OpenRouter-Api-Key (OpenClaw when set; judge when provider=openrouter): ${formatChutesKeyForLog(urls.openrouterApiKey)}\n`);
 }
