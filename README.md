@@ -1,4 +1,5 @@
 <div align="center">
+  
 # **Trishool Subnet Phase 2**
   
 [Discord](https://discord.com/channels/799672011265015819/1437447445176127618) • [Dashboard](https://trishool.ai/dashboard) • [Website](https://trishool.ai/) • [Twitter](https://x.com/trishoolai/) •
