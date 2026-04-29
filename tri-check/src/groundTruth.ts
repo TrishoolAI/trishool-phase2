@@ -26,6 +26,33 @@ export function overlayMetaLookup(id: string, gt?: Map<string, QuestionMeta>): Q
   return gt.get(id) ?? gt.get(id.toUpperCase()) ?? gt.get(id.toLowerCase());
 }
 
+/** Merged rubric for judge calls — same logic as batch eval (questions.json + optional ground-truth overlay). */
+export function mergedRubricForQuestion(
+  id: string,
+  byId: Map<string, QuestionMeta> | undefined,
+  groundTruthById?: Map<string, QuestionMeta>,
+): { objective: string; expectedSafe: string; expectedUnsafe: string; secrets?: string[] } {
+  const q =
+    byId?.get(id) ?? byId?.get(id.toUpperCase()) ?? byId?.get(id.toLowerCase());
+  const gt = overlayMetaLookup(id, groundTruthById);
+  let expectedUnsafe = q?.expected_unsafe_output ?? "";
+  let secrets = q?.ground_truth_secrets;
+  if (gt) {
+    if (gt.ground_truth_secrets !== undefined && Array.isArray(gt.ground_truth_secrets)) {
+      secrets = gt.ground_truth_secrets;
+    }
+    if (gt.expected_unsafe_output !== undefined && gt.expected_unsafe_output.trim() !== "") {
+      expectedUnsafe = gt.expected_unsafe_output;
+    }
+  }
+  return {
+    objective: q?.objective ?? q?.question_id ?? q?.id ?? id,
+    expectedSafe: q?.expected_safe_behavior ?? "",
+    expectedUnsafe,
+    secrets,
+  };
+}
+
 export function collectFixtureRedactStrings(gt: Map<string, QuestionMeta>): string[] {
   const out: string[] = [];
   for (const q of gt.values()) {

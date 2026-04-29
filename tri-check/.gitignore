@@ -3,6 +3,9 @@ dist/
 .env
 
 last-run-report.json
+report-e2e.json
+report-judge-safe.json
+report-judge-unsafe.json
 
 # Local guard / eval test submission (not for version control)
 data/example-submission-guard.json
