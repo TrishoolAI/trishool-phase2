@@ -1,6 +1,11 @@
-# Trishool Subnet V2 — Guard Model Challenge
+<div align="center">
+# **Trishool Subnet Phase 2**
+  
+[Discord](https://discord.com/channels/799672011265015819/1437447445176127618) • [Dashboard](https://trishool.ai/dashboard) • [Website](https://trishool.ai/) • [Twitter](https://x.com/trishoolai/) •
+[Network](https://taostats.io/subnets/23/chart)
+</div>
 
-A Bittensor subnet for evaluating adversarial robustness of guard AI models. Miners submit adversarial prompts that validators evaluate via agents (OpenClaw + Judge); scores are aggregated and written as on-chain weights.
+A Bittensor subnet building the SOTA AI guard model. Miners submit adversarial prompts that validators evaluate via agents (OpenClaw + Judge); scores are aggregated and written as on-chain weights.
 
 ## Architecture
 
