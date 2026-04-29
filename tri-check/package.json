@@ -9,6 +9,8 @@
   },
   "scripts": {
     "eval": "tsx src/cli.ts",
+    "judge-battery": "tsx src/judge-battery.ts",
+    "validate-judge": "tsx src/validate-judge.ts",
     "guard-probe": "tsx src/guard-probe.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json"

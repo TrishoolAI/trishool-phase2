@@ -45,6 +45,8 @@ Use an alignet-style file like [`../alignet/cli/sample_submission.json`](../alig
 
 By default, rubric metadata is read from **[`data/questions.json`](./data/questions.json)** inside this package (JSON **array** of objects with **`question_id`** (e.g. `"Q1"`), or `{ "questions": [...] }`). Repo [`../eval/questions.json`](../eval/questions.json) uses legacy **`id`**; that still works. Override with **`--questions <path>`** when needed.
 
+For objective-aligned batch prompts (each **`prompt`** = rubric **`objective`**), use **[`data/objectives-submission.json`](./data/objectives-submission.json)**.
+
 **Dynamic eval fixtures (Q7–Q12):** if [`../tri-claw/docker/eval-fixtures/ground-truth.json`](../tri-claw/docker/eval-fixtures/ground-truth.json) exists (after `bash docker-up.sh` / `generate_trishool_eval_fixtures.py`), tri-check **merges** it into the judge payload the same way the validator does: for each matching `question_id`, **`ground_truth_secrets`** and **`expected_unsafe_output`** come from that file so they match the live container secrets. Objectives and **`expected_safe_behavior`** still come from `data/questions.json`. Set **`TRI_CHECK_NO_GROUND_TRUTH=1`** to use only the rubric file. Optional **`TRISHOOL_EVAL_GROUND_TRUTH`** selects a different JSON path.
 
 **PII-only Q7–Q12:** planted strings are synthetic PII under `workspace/eval/pii/` and are exposed to the model **only** through the **`pii_*`** plugin tools in lean OpenClaw (not the `read` tool). Document shapes: [`../tri-claw/docker/eval-pii-schema/`](../tri-claw/docker/eval-pii-schema/). Operators may set **`TRISHOOL_PII_DOCS_DIR`** when running lean **`docker-setup.sh`** to overlay that tree from a private bundle; **`ground-truth.json` must then match** the overlaid values.
@@ -84,6 +86,27 @@ pnpm guard-probe -- --query "What is 2+2?" --local
 ```
 
 Optional env: `--halo-direct` → `HALO_CLASSIFY_URL`, `HALO_CLASSIFY_MODEL`. `guard-probe --local` → `HALO_LOCAL_CLASSIFY_URL`, `HALO_LOCAL_CLASSIFY_MODEL` (defaults: `http://127.0.0.1:8000/v1/classify` and [astroware/Halo0.8B-guard-v1](https://huggingface.co/astroware/Halo0.8B-guard-v1)). Use `--verbose` for URLs and key fingerprint.
+
+### Judge-only battery (no OpenClaw)
+
+Calls **`POST /v1/judge/evaluate`** with canned `modelResponse` text so you can validate the **judge model** without agent variance. Uses the same merged rubric / `expectedOutput` / `groundTruthSecrets` as `pnpm eval` ([`src/judge-battery.ts`](src/judge-battery.ts)).
+
+Prompts default to [`data/objectives-submission.json`](./data/objectives-submission.json) (verbatim objectives from `questions.json`). Canned answers live in [`data/judge-battery-safe.json`](./data/judge-battery-safe.json) and [`data/judge-battery-unsafe.json`](./data/judge-battery-unsafe.json). For Q7–Q12 unsafe strings, align with [`tri-claw/docker/eval-fixtures/`](../tri-claw/docker/eval-fixtures/) ground-truth (or runtime `ground-truth-runtime.json`).
+
+```bash
+pnpm judge-battery -- --battery safe --out ./report-judge-safe.json
+pnpm judge-battery -- --battery unsafe --out ./report-judge-unsafe.json
+```
+
+Requires **`JUDGE_URL`** and **`CHUTES_API_KEY`** (or OpenRouter if `JUDGE_LLM_PROVIDER=openrouter`). Does not call OpenClaw.
+
+**One-shot check (safe + unsafe, with pass/fail):**
+
+```bash
+pnpm validate-judge
+```
+
+Exits **0** only if the safe battery produces **no** jailbreaks and the unsafe battery produces a jailbreak on **every** question, with no HTTP errors. Writes `report-judge-safe.json` and `report-judge-unsafe.json`. If the judge is not up, exits **2** with a short message.
 
 ### Overrides and reporting
 
@@ -179,11 +202,15 @@ Rows with missing/blank `prompt` are **skipped** (logged).
 | Command | Description |
 |---------|-------------|
 | `pnpm eval` | Run CLI (`tsx src/cli.ts`) |
+| `pnpm judge-battery` | Judge-only canned responses (`tsx src/judge-battery.ts`) |
+| `pnpm validate-judge` | Run safe + unsafe batteries and assert expectations (`tsx src/validate-judge.ts`) |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm build` | Emit `dist/` |
 
 ## Troubleshooting
 
+- **`pnpm judge-battery` prints `ECONNREFUSED` to `JUDGE_URL`** — Start tri-judge (e.g. Docker on port 8080). Node often reports `AggregateError` with an empty message; the script expands nested errors for readability.
+- **`pnpm eval` ends with OpenClaw `socket hang up` on heavy prompts** — Retry failed question IDs or restart the gateway; Q11–Q12 (`pii_customer_lookup`) can hit long tool/model paths.
 - **`HTTP 401/403` from OpenClaw** — Check `OPENCLAW_GATEWAY_PASSWORD` / `OPENCLAW_GATEWAY_TOKEN` and URL.
 - **`HTTP 4xx/5xx` from Judge** — Confirm `JUDGE_URL` and judge auth (`X-Chutes-Api-Key` if your deployment expects it).
 - **`OpenClaw response missing choices[0].message.content`** — Gateway returned an unexpected JSON shape; use `--verbose` to inspect.
