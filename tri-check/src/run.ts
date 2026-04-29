@@ -7,7 +7,7 @@ import {
   redactSecretsFromObject,
   type ResolvedServiceUrls,
 } from "./env.js";
-import { overlayMetaLookup } from "./groundTruth.js";
+import { mergedRubricForQuestion } from "./groundTruth.js";
 import { indexQuestionsById, loadQuestionsFromPath, loadSubmission } from "./io.js";
 import type {
   CliOutputReport,
@@ -30,31 +30,7 @@ export interface RunOptions {
   fixtureRedact?: string[];
 }
 
-function metaForId(
-  id: string,
-  byId: Map<string, QuestionMeta> | undefined,
-  groundTruthById?: Map<string, QuestionMeta>,
-): { objective: string; expectedSafe: string; expectedUnsafe: string; secrets?: string[] } {
-  const q =
-    byId?.get(id) ?? byId?.get(id.toUpperCase()) ?? byId?.get(id.toLowerCase());
-  const gt = overlayMetaLookup(id, groundTruthById);
-  let expectedUnsafe = q?.expected_unsafe_output ?? "";
-  let secrets = q?.ground_truth_secrets;
-  if (gt) {
-    if (gt.ground_truth_secrets !== undefined && Array.isArray(gt.ground_truth_secrets)) {
-      secrets = gt.ground_truth_secrets;
-    }
-    if (gt.expected_unsafe_output !== undefined && gt.expected_unsafe_output.trim() !== "") {
-      expectedUnsafe = gt.expected_unsafe_output;
-    }
-  }
-  return {
-    objective: q?.objective ?? q?.question_id ?? q?.id ?? id,
-    expectedSafe: q?.expected_safe_behavior ?? "",
-    expectedUnsafe,
-    secrets,
-  };
-}
+export { mergedRubricForQuestion } from "./groundTruth.js";
 
 function isBlankPrompt(p: string | undefined): boolean {
   return p === undefined || String(p).trim() === "";
@@ -158,7 +134,7 @@ async function evaluateOne(params: {
   openclawBase: string;
   judgeBase: string;
   urls: ResolvedServiceUrls;
-  meta: ReturnType<typeof metaForId>;
+  meta: ReturnType<typeof mergedRubricForQuestion>;
   submissionMeta?: SubmissionEntry;
   verbose: boolean;
   fixtureRedact: string[];
@@ -304,7 +280,7 @@ export async function runFromSubmission(args: {
     if (!entry || typeof entry !== "object") {
       results.push({
         id,
-        objective: metaForId(id, byId, args.options.groundTruthById).objective,
+        objective: mergedRubricForQuestion(id, byId, args.options.groundTruthById).objective,
         promptSubmitted: "",
         openclawUrlUsed: args.options.openclawUrl,
         openclawResponse: "",
@@ -318,7 +294,7 @@ export async function runFromSubmission(args: {
     const prompt = typeof entry.prompt === "string" ? entry.prompt : "";
     const perUrl = entry.url !== undefined && String(entry.url).trim() !== "" ? String(entry.url).replace(/\/$/, "") : undefined;
     const openclawBase = perUrl ?? args.options.openclawUrl;
-    const meta = metaForId(id, byId, args.options.groundTruthById);
+    const meta = mergedRubricForQuestion(id, byId, args.options.groundTruthById);
     const r = await evaluateOne({
       id,
       prompt,
@@ -348,7 +324,7 @@ export async function runDirect(args: {
     const questions = loadQuestionsFromPath(args.questionsPath);
     byId = indexQuestionsById(questions);
   }
-  const meta = metaForId(args.questionId, byId, args.options.groundTruthById);
+  const meta = mergedRubricForQuestion(args.questionId, byId, args.options.groundTruthById);
   if (!args.questionsPath) {
     process.stderr.write(
       "[tri-check] note: no --questions file; judge expected safe/unsafe text may be empty — scoring may be less meaningful.\n",
