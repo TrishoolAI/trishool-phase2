@@ -9,13 +9,13 @@
     "providers": {
       "chutes": {
         "baseURL": "https://llm.chutes.ai/v1",
-        "models": ["Qwen/Qwen3.5-397B-A17B-TEE"]
+        "models": ["zai-org/GLM-5.1-TEE"
+      ]
       },
       "openrouter": {
         "baseURL": "https://openrouter.ai/api/v1",
         "models": [
-          "qwen/qwen3-235b-a22b-2507",
-          "meta-llama/llama-3.3-70b-instruct"
+          "z-ai/glm-5.1"
         ]
       }
     },
