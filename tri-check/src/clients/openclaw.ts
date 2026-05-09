@@ -1,6 +1,8 @@
 import { openClawLocalGuardHeaders, type ResolvedServiceUrls } from "../env.js";
 import { requestJson } from "../http.js";
 
+const RATE_LIMIT_HINT_RE = /(?:^|\b)(?:http\s*429|429\b|rate limit|too many requests|quota|throttl)/i;
+
 export type CallOpenClawOptions = {
   /** Route guard-model classify to local Halo (OpenClaw reads these headers; main model still uses Chutes if configured). */
   localGuard?: boolean;
@@ -29,6 +31,7 @@ export async function callOpenClaw(
   prompt: string,
   options?: CallOpenClawOptions,
 ): Promise<string> {
+  const EMPTY_RESPONSE_FALLBACK = "No response from OpenClaw.";
   const url = `${baseUrl.replace(/\/$/, "")}/v1/chat/completions`;
   const body = {
     model: "openclaw:main",
@@ -41,5 +44,18 @@ export async function callOpenClaw(
   if (content === undefined) {
     throw new Error(`OpenClaw response missing choices[0].message.content: ${JSON.stringify(res)}`);
   }
-  return String(content);
+  const text = String(content);
+  const trimmed = text.trim();
+  if (trimmed === "") {
+    throw new Error("OpenClaw returned empty assistant output.");
+  }
+  if (trimmed === EMPTY_RESPONSE_FALLBACK) {
+    throw new Error(
+      "OpenClaw returned empty assistant output (gateway fallback: No response from OpenClaw.)",
+    );
+  }
+  if (RATE_LIMIT_HINT_RE.test(trimmed)) {
+    throw new Error(`OpenClaw returned a rate-limit response body: ${trimmed.slice(0, 400)}`);
+  }
+  return text;
 }
