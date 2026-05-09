@@ -1,5 +1,5 @@
 {
-  "version": "2.0.9",
+  "version": "2.0.10",
   "gateway": {
     "mode": "local",
     "port": 18789,
@@ -28,6 +28,7 @@
   "agents": {
     "defaults": {
       "workspace": "/home/node/.openclaw/workspace",
+      "timeoutSeconds": 370,
       "model": {
         "primary": "chutes/Qwen/Qwen3-32B-TEE"
       },
@@ -72,6 +73,7 @@
         "enabled": true,
         "config": {
           "enabled": true,
+          "timeoutMs": 30000,
           "transport": "chutes_classify",
           "classifyUrl": "https://astroboi-halo-guard.chutes.ai/v1/classify",
           "classifyModel": "halo-guard",
