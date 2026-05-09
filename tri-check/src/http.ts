@@ -18,11 +18,14 @@ function parseUrl(url: string) {
   };
 }
 
+const DEFAULT_TIMEOUT_MS = 380_000;
+
 export async function requestJson<T>(
   method: string,
   url: string,
   body?: unknown,
   headers: Record<string, string> = {},
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     const { protocol, hostname, port, path: pathname } = parseUrl(url);
@@ -59,6 +62,9 @@ export async function requestJson<T>(
         }
         resolve(parsed as T);
       });
+    });
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error(`OpenClaw request timed out after ${Math.round(timeoutMs / 1000)}s`));
     });
     req.on("error", reject);
     if (payload !== undefined) req.write(payload, "utf8");

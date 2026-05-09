@@ -56,3 +56,6 @@ tri-claw/docker/eval-fixtures/
 # Local API smoke reports (may contain request payloads)
 halo-guard-classify-report.json
 halo-guard-classify-smoke.py
+
+# Local simulation / scratch test scripts
+test_timeout_simulation.py
