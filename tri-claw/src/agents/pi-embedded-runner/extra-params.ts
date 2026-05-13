@@ -635,6 +635,33 @@ function createZaiToolStreamWrapper(
 }
 
 /**
+ * Inject `enable_thinking` into Chutes payloads.
+ * Qwen3 TEE models think by default; pass false to disable, true to force-enable.
+ * Configurable via `agents.defaults.models["chutes/<modelId>"].params.enable_thinking`.
+ */
+function createChutesThinkingWrapper(
+  baseStreamFn: StreamFn | undefined,
+  enableThinking: boolean,
+): StreamFn {
+  const underlying = baseStreamFn ?? streamSimple;
+  return (model, context, options) => {
+    if (model.provider !== "chutes") {
+      return underlying(model, context, options);
+    }
+    const originalOnPayload = options?.onPayload;
+    return underlying(model, context, {
+      ...options,
+      onPayload: (payload) => {
+        if (payload && typeof payload === "object") {
+          (payload as Record<string, unknown>).enable_thinking = enableThinking;
+        }
+        originalOnPayload?.(payload);
+      },
+    });
+  };
+}
+
+/**
  * Chutes accepts OpenAI-compatible tool calls in non-stream mode, but its
  * streaming SSE responses can omit `tool_calls` entirely and only emit text.
  * Run Chutes requests via non-streaming fetch and synthesize the normal Pi
@@ -1108,6 +1135,11 @@ export function applyExtraParamsToAgent(
   if (provider === "chutes") {
     const toolChoiceOverride = merged?.toolChoice as string | undefined;
     agent.streamFn = createChutesNonStreamingWrapper(agent.streamFn, toolChoiceOverride ?? "auto");
+    // Inject enable_thinking when explicitly configured in agents.defaults.models params.
+    const enableThinking = merged?.enable_thinking;
+    if (typeof enableThinking === "boolean") {
+      agent.streamFn = createChutesThinkingWrapper(agent.streamFn, enableThinking);
+    }
   }
 
   // Guard Google payloads against invalid negative thinking budgets emitted by
