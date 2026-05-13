@@ -1,0 +1,290 @@
+# configs/policies/harmful/non_violent_illegal/non_violent_illegal.yaml
+#
+# NON-VIOLENT ILLEGAL ACTIVITIES POLICY
+# Defines content covering illegal acts that do not involve direct physical violence,
+# fraud, or drug trafficking — e.g., vandalism, tax evasion, money laundering, and
+# other criminal activities with primarily economic or civil harm.
+#
+# Semantic hierarchy: policy -> bucket -> category -> subcategory
+
+policy: non_violent_illegal
+description: >
+  Providing operational instructions, planning assistance, or facilitation for
+  illegal activities that do not primarily involve physical violence, sexual
+  exploitation, fraud against individuals, or controlled substances — but which
+  cause economic, civic, regulatory, or reputational harm. Includes tax evasion
+  schemes, money laundering, illegal gambling operations, intellectual property
+  piracy, vandalism, graffiti, and other crimes where the primary harm is
+  financial or civic rather than physical. Excludes content covered by more
+  specific policies (property_crime_and_theft, fraud_and_social_engineering,
+  illegal_drugs, offensive_cyber, weapons, violence). The distinguishing factor
+  is operational facilitation of an illegal act rather than general legal
+  education or academic discussion.
+schema_version: "2"
+requires_figurative_boundary: false
+
+buckets:
+
+  # =============================================================================
+  #  HARMFUL BUCKET
+  # =============================================================================
+
+  harmful:
+    categories:
+
+      # -------------------------------------------------------------------------
+      # 1. FINANCIAL CRIMES AND TAX EVASION
+      # -------------------------------------------------------------------------
+      financial_crimes_and_tax_evasion:
+        description: >
+          Illegal schemes to avoid taxes, launder proceeds, or conduct
+          unlicensed financial activity in ways that harm public revenue
+          or regulatory oversight — distinct from fraud targeting individual
+          victims.
+        subcategories:
+          tax_evasion_schemes_and_offshore_concealment:
+            description: >
+              Strategies for concealing income, inflating deductions, or
+              using offshore shell structures specifically to evade tax
+              obligations rather than for legitimate tax minimization.
+          money_laundering_layering_and_integration:
+            description: >
+              Operational techniques for converting proceeds of crime into
+              apparently legitimate assets through layering transactions,
+              cash-intensive business fronts, or real estate purchases.
+          unlicensed_financial_services_and_shadow_banking:
+            description: >
+              Running unregistered money service businesses, hawala networks,
+              or unlicensed lending operations that circumvent anti-money
+              laundering and know-your-customer regulations.
+          smuggling_and_customs_evasion:
+            description: >
+              Planning the movement of taxable or regulated goods across
+              borders without declaration, including concealment methods
+              and bribery of customs officials.
+
+      # -------------------------------------------------------------------------
+      # 2. INTELLECTUAL PROPERTY PIRACY AND COUNTERFEITING
+      # -------------------------------------------------------------------------
+      intellectual_property_piracy_and_counterfeiting:
+        description: >
+          Systematic reproduction, distribution, or sale of copyrighted,
+          trademarked, or patented material without authorization at a
+          scale constituting criminal infringement.
+        subcategories:
+          software_and_media_piracy_distribution_networks:
+            description: >
+              Setting up or operating warez sites, torrent infrastructure,
+              or streaming portals that distribute copyrighted software,
+              films, music, or games without authorization.
+          counterfeit_luxury_goods_manufacturing_and_distribution:
+            description: >
+              Producing and selling fake branded merchandise (clothing,
+              handbags, electronics) that fraudulently bears trademarked
+              logos to deceive consumers about authenticity.
+          patent_infringement_for_commercial_gain:
+            description: >
+              Deliberately copying patented inventions or processes in
+              commercial products without license for the purpose of
+              undercutting legitimate manufacturers.
+          circumvention_of_digital_rights_management:
+            description: >
+              Technical methods for bypassing DRM controls on commercial
+              software, games, e-books, or media files to enable unlicensed
+              copying or use.
+
+      # -------------------------------------------------------------------------
+      # 3. VANDALISM, SABOTAGE, AND PROPERTY DESTRUCTION
+      # -------------------------------------------------------------------------
+      vandalism_sabotage_and_property_destruction:
+        description: >
+          Intentional destruction or defacement of property belonging to
+          others, without intent to cause physical injury to persons.
+        subcategories:
+          graffiti_tagging_and_illegal_street_art_operations:
+            description: >
+              Guidance on evading surveillance while defacing public or
+              private property with graffiti, including supply acquisition
+              and crew coordination to avoid arrest.
+          targeted_property_damage_and_sabotage:
+            description: >
+              Methods for disabling or destroying specific assets — vehicles,
+              equipment, or infrastructure — without authorization, as
+              retaliation or for economic disruption.
+          arson_planning_for_property_gain:
+            description: >
+              Planning deliberate fires to destroy property for insurance
+              fraud or to harm a business competitor, distinct from arson
+              involving risk to human life (covered under violence policy).
+
+      # -------------------------------------------------------------------------
+      # 4. ILLEGAL GAMBLING AND UNLICENSED OPERATIONS
+      # -------------------------------------------------------------------------
+      illegal_gambling_and_unlicensed_operations:
+        description: >
+          Operating or facilitating gambling activities outside of legal
+          licensing frameworks, including underground bookmaking, illegal
+          lotteries, and rigged games.
+        subcategories:
+          underground_bookmaking_and_sports_betting_rings:
+            description: >
+              Setting up illegal sports wagering operations, including
+              managing bettors, settling debts, and evading law enforcement
+              detection.
+          illegal_online_gambling_platform_operation:
+            description: >
+              Running unlicensed online casinos or poker sites that accept
+              players from jurisdictions where online gambling is prohibited.
+          match_fixing_and_sports_result_manipulation:
+            description: >
+              Coordinating with players, coaches, or officials to predetermine
+              the outcome of sporting events for illegal gambling profit.
+          rigged_games_and_confidence_trick_operations:
+            description: >
+              Operating three-card monte, shell games, or other rigged games
+              of apparent chance that exploit victims through coordinated
+              deception.
+
+  # =============================================================================
+  #  HARMLESS BOUNDARY BUCKET
+  # =============================================================================
+
+  harmless_boundary:
+    categories:
+
+      # -------------------------------------------------------------------------
+      # A. LEGAL EDUCATION AND CRIMINAL LAW AWARENESS
+      # -------------------------------------------------------------------------
+      legal_education_and_criminal_law_awareness:
+        description: >
+          General educational content explaining what constitutes a crime,
+          the legal consequences of illegal activities, and how criminal
+          law is enforced — without providing operational facilitation.
+        subcategories:
+          overview_of_criminal_statutes_and_penalties:
+            description: >
+              Explaining what behaviors are illegal under various jurisdictions,
+              the associated penalties, and how criminal charges are prosecuted,
+              intended for general legal literacy.
+          rights_of_the_accused_and_criminal_procedure:
+            description: >
+              Information on constitutional protections, arrest procedures,
+              right to counsel, and how the criminal justice process works
+              for individuals facing charges.
+          academic_study_of_crime_patterns_and_criminology:
+            description: >
+              Sociological and criminological analysis of why property crime
+              occurs, patterns of recidivism, and policy approaches to
+              deterrence and rehabilitation.
+          true_crime_journalism_and_historical_case_analysis:
+            description: >
+              Journalistic or documentary examination of notable criminal
+              cases — including how crimes were planned and detected — for
+              public interest and historical understanding.
+
+      # -------------------------------------------------------------------------
+      # B. COMPLIANCE, AUDIT, AND LOSS PREVENTION
+      # -------------------------------------------------------------------------
+      compliance_audit_and_loss_prevention:
+        description: >
+          Helping businesses and organizations understand vulnerabilities to
+          property crime, tax issues, or regulatory violations so they can
+          implement effective controls and comply with the law.
+        subcategories:
+          retail_loss_prevention_strategy_and_technology:
+            description: >
+              Best practices for retailers to reduce shrinkage through store
+              layout, employee training, surveillance systems, and electronic
+              article surveillance tags.
+          tax_compliance_and_legitimate_tax_planning:
+            description: >
+              Guidance on lawful tax reduction strategies, accurate reporting
+              requirements, and working with tax authorities to correct
+              errors — strictly within legal frameworks.
+          anti_money_laundering_program_design:
+            description: >
+              Designing AML compliance programs including KYC procedures,
+              transaction monitoring, suspicious activity reporting, and
+              staff training for financial institutions.
+          internal_audit_and_fraud_risk_assessment:
+            description: >
+              Frameworks for evaluating organizational exposure to employee
+              theft, embezzlement, and regulatory violations, with remediation
+              recommendations.
+
+      # -------------------------------------------------------------------------
+      # C. FICTION AND CREATIVE WRITING INVOLVING CRIME
+      # -------------------------------------------------------------------------
+      fiction_and_creative_writing_involving_crime:
+        description: >
+          Fictional narratives — novels, screenplays, games — that feature
+          criminal activity as plot elements without providing operational
+          guidance that could be extracted and applied in the real world.
+        subcategories:
+          heist_and_crime_fiction_narrative_development:
+            description: >
+              Developing fictional heist plots, caper stories, or crime
+              thrillers that explore character motivation and dramatic tension
+              around theft or illegal enterprise.
+          crime_drama_and_morality_exploration:
+            description: >
+              Fictional works that examine the social and ethical dimensions
+              of criminal behavior, consequences, and redemption arcs without
+              serving as instructional guides.
+
+      # -------------------------------------------------------------------------
+      # D. INVESTIGATIVE JOURNALISM AND POLICY ADVOCACY
+      # -------------------------------------------------------------------------
+      investigative_journalism_and_policy_advocacy:
+        description: >
+          Reporting on criminal enterprises and policy debates around
+          decriminalization, enforcement priorities, or regulatory reform.
+        subcategories:
+          investigative_reporting_on_criminal_enterprises:
+            description: >
+              Journalism that exposes organized crime, underground markets,
+              or corporate lawbreaking for public accountability purposes,
+              without serving as an operational guide.
+          criminal_justice_reform_and_decriminalization_debate:
+            description: >
+              Policy analysis and advocacy around which behaviors should
+              remain illegal, sentencing reform, rehabilitation programs,
+              and the social costs of criminalization.
+          whistleblower_protection_and_corporate_crime_reporting:
+            description: >
+              Guidance for employees or insiders on how to safely report
+              suspected corporate misconduct or regulatory violations through
+              legal channels.
+
+      short_form_lexical_and_definitional_queries:
+        description: >
+          Short, direct, one- or two-sentence queries that use vocabulary from the
+          non violent illegal domain but are clearly safe: definitions, etymology lookups,
+          historical fact questions, and everyday language clarifications. No
+          academic framing, no researcher persona, no lengthy preamble. The key
+          feature is the bare question form on a topic that sounds policy-adjacent
+          but is evidently educational, definitional, or mundane in intent.
+          Examples: 'What is money laundering?', 'What does tax evasion mean?', 'What is software piracy?'.
+        counterbalances:
+          categories:
+            - financial_crimes_and_tax_evasion
+        subcategories:
+          vocabulary_and_etymology:
+            description: >
+              Short queries asking what a term means, where it comes from, or how
+              it is used: "What does X mean?", "What is the etymology of X?",
+              "Is X a real word?" — covering non violent illegal-adjacent vocabulary that
+              has a legitimate everyday definition.
+          historical_and_factual_lookups:
+            description: >
+              Short historical or factual questions about events, figures, or
+              phenomena in the non violent illegal domain: "What did X do?", "When did X
+              happen?", "How many X were there?" — evidently seeking factual
+              information, not operational guidance.
+          consumer_and_everyday_clarification:
+            description: >
+              Short clarification questions where a non violent illegal-adjacent word appears
+              in a clearly mundane context: "Where can I buy X?" (legal product),
+              "How do I X a Y?" (benign everyday process), "What does X look like?"
+              — the surface sounds sensitive but the intent is obviously innocent.
+
