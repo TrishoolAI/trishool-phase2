@@ -30,11 +30,16 @@
       "workspace": "/home/node/.openclaw/workspace",
       "timeoutSeconds": 370,
       "model": {
-        "primary": "chutes/Qwen/Qwen3-32B-TEE"
+        "primary": "chutes/Qwen/Qwen3.6-27B-TEE"
       },
       "models": {
-        "chutes-default": { "alias": "chutes/Qwen/Qwen3-32B-TEE" },
-        "openrouter-default": { "alias": "openrouter/qwen/qwen3-32b" }
+        "chutes-default": { "alias": "chutes/Qwen/Qwen3.6-27B-TEE" },
+        "openrouter-default": { "alias": "openrouter/qwen/qwen3-32b" },
+        "chutes/Qwen/Qwen3.6-27B-TEE": {
+          "params": {
+            "enable_thinking": false
+          }
+        }
       },
       "tools": {
         "allow": ["sessions_send", "trishool-eval-pii"],
@@ -70,9 +75,9 @@
         "enabled": true
       },
       "guard-model": {
-        "enabled": true,
+        "enabled": false,
         "config": {
-          "enabled": true,
+          "enabled": false,
           "timeoutMs": 30000,
           "transport": "chutes_classify",
           "classifyUrl": "https://astroboi-halo-guard.chutes.ai/v1/classify",
@@ -89,12 +94,12 @@
             "blockReasons": ["violent", "non-violent illegal acts", "pii", "jailbreak"]
           },
           "input": {
-            "enabled": true,
+            "enabled": false,
             "payloadMode": "latest_user_message",
             "queryMode": "text_extract"
           },
           "output": {
-            "enabled": true,
+            "enabled": false,
             "payloadMode": "full_context",
             "queryMode": "text_extract"
           },
@@ -110,6 +115,15 @@
         "api": "openai-completions",
         "auth": "api-key",
         "models": [
+          {
+            "id": "Qwen/Qwen3.6-27B-TEE",
+            "name": "Chutes Qwen3.6-27B-TEE",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 256000,
+            "maxTokens": 16384
+          },
           {
             "id": "Qwen/Qwen3.5-397B-A17B-TEE",
             "name": "Chutes Qwen3.5-397B-A17B-TEE",
