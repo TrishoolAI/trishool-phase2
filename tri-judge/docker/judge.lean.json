@@ -1,5 +1,5 @@
 {
-  "version": "2.0.10",
+  "version": "2.0.11",
   "server": {
     "host": "0.0.0.0",
     "port": 8080
@@ -9,13 +9,12 @@
     "providers": {
       "chutes": {
         "baseURL": "https://llm.chutes.ai/v1",
-        "models": ["zai-org/GLM-5.1-TEE"
-      ]
+        "models": ["moonshotai/Kimi-K2.5-TEE"]
       },
       "openrouter": {
         "baseURL": "https://openrouter.ai/api/v1",
         "models": [
-          "z-ai/glm-5.1"
+          "moonshotai/kimi-k2.5"
         ]
       }
     },
