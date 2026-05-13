@@ -1,5 +1,5 @@
 {
-  "version": "2.0.10",
+  "version": "2.0.11",
   "gateway": {
     "mode": "local",
     "port": 18789,
@@ -75,9 +75,9 @@
         "enabled": true
       },
       "guard-model": {
-        "enabled": false,
+        "enabled": true,
         "config": {
-          "enabled": false,
+          "enabled": true,
           "timeoutMs": 30000,
           "transport": "chutes_classify",
           "classifyUrl": "https://astroboi-halo-guard.chutes.ai/v1/classify",
@@ -94,12 +94,12 @@
             "blockReasons": ["violent", "non-violent illegal acts", "pii", "jailbreak"]
           },
           "input": {
-            "enabled": false,
+            "enabled": true,
             "payloadMode": "latest_user_message",
             "queryMode": "text_extract"
           },
           "output": {
-            "enabled": false,
+            "enabled": true,
             "payloadMode": "full_context",
             "queryMode": "text_extract"
           },
