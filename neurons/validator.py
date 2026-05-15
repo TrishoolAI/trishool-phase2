@@ -21,7 +21,7 @@ import logging
 import time
 import os
 import sys
-import json
+# import json  # hotfix/0008: only used by commented-out GT overlay debug dump; restore with GT block
 import random
 import aiohttp
 import re
@@ -47,11 +47,12 @@ from alignet.base.validator import BaseValidatorNeuron
 
 # Alignet Subnet imports
 from alignet.validator.agent_client import AgentClient
-from alignet.validator.eval_ground_truth import (
-    collect_redaction_strings_from_ground_truth,
-    load_ground_truth_questions,
-    resolve_ground_truth_path,
-)
+# hotfix/0008: GT overlay imports commented out — restore with the GT block in _evaluate_question.
+# from alignet.validator.eval_ground_truth import (
+#     collect_redaction_strings_from_ground_truth,
+#     load_ground_truth_questions,
+#     resolve_ground_truth_path,
+# )
 from alignet.validator.platform_api_client import PlatformAPIClient
 from alignet.models.submission import MinerSubmission
 from alignet.utils.telegram import send_error_safe
@@ -339,26 +340,35 @@ class Validator(BaseValidatorNeuron):
             submission_data: Full submission data
         """
 
-        gt_path = resolve_ground_truth_path(project_root)
-        self._eval_ground_truth_questions = load_ground_truth_questions(gt_path)
-        if self._eval_ground_truth_questions:
-            logger.info(
-                "Loaded eval ground truth for %s question(s) from %s",
-                len(self._eval_ground_truth_questions),
-                gt_path,
-            )
-            for secret in collect_redaction_strings_from_ground_truth(gt_path):
-                if secret and secret not in self.agent_client._secret_values:
-                    self.agent_client._secret_values.append(secret)
-
-            ## save to json file for debugging
-            os.makedirs("outputs", exist_ok=True)
-            with open(f"outputs/eval_ground_truth_questions.json", "w") as f:
-                json.dump(self._eval_ground_truth_questions, f, indent=4)
-            logger.info(f"Saved eval ground truth questions to outputs/eval_ground_truth_questions.json")
-        else:
-            logger.info("No eval ground truth file at %s (judge uses platform question fields)", gt_path)
-            return None
+        # hotfix/0008: GT overlay disabled. ground-truth-runtime.json / ground-truth.json
+        # contain PII rubrics keyed to Q7–Q12, but questions.json now defines those IDs as
+        # non-PII illegal-acts questions. Loading the overlay does two things that poison the
+        # judge: (1) overwrites expected_unsafe_output with PII rubric text, so the judge
+        # grades by "did the model reveal PII markers" instead of "did it produce harmful
+        # content"; (2) sends PII strings as groundTruthSecrets, triggering the exclusive
+        # substring-match rule. Real jailbreaks on Q7–Q12 are therefore scored safe.
+        #
+        # To restore: uncomment the block below and delete the `self._eval_ground_truth_questions = {}`
+        # line. Prerequisite: realign ground-truth fixture rubrics with questions.json first.
+        #
+        # gt_path = resolve_ground_truth_path(project_root)
+        # self._eval_ground_truth_questions = load_ground_truth_questions(gt_path)
+        # if self._eval_ground_truth_questions:
+        #     logger.info(
+        #         "Loaded eval ground truth for %s question(s) from %s",
+        #         len(self._eval_ground_truth_questions),
+        #         gt_path,
+        #     )
+        #     for secret in collect_redaction_strings_from_ground_truth(gt_path):
+        #         if secret and secret not in self.agent_client._secret_values:
+        #             self.agent_client._secret_values.append(secret)
+        #     os.makedirs("outputs", exist_ok=True)
+        #     with open(f"outputs/eval_ground_truth_questions.json", "w") as f:
+        #         json.dump(self._eval_ground_truth_questions, f, indent=4)
+        #     logger.info(f"Saved eval ground truth questions to outputs/eval_ground_truth_questions.json")
+        # else:
+        #     logger.info("No eval ground truth file at %s — using platform question fields only", gt_path)
+        self._eval_ground_truth_questions = {}
         try:
             challenge_id = challenge_data.get("id", "")
             # Scoring existence was already batch-checked in _evaluation_loop; only unscored pairs are processed here.
