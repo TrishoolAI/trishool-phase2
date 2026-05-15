@@ -6,7 +6,10 @@ import type { QuestionMeta } from "./types.js";
 
 /** Same default / env as alignet `resolve_ground_truth_path` (validator). */
 export function resolveGroundTruthPath(): string | null {
-  if (process.env.TRI_CHECK_NO_GROUND_TRUTH === "1") return null;
+  // hotfix/0008: default-deny. Ground-truth fixture files still contain PII rubrics
+  // for Q7–Q12 which poison the judge (see neurons/validator.py for full explanation).
+  // Only load the overlay when explicitly opted in with TRI_CHECK_GROUND_TRUTH_ENABLED=1.
+  if (process.env.TRI_CHECK_GROUND_TRUTH_ENABLED !== "1") return null;
   const env = (process.env.TRISHOOL_EVAL_GROUND_TRUTH || "").trim();
   if (env) {
     return path.isAbsolute(env) ? path.resolve(env) : path.resolve(REPO_ROOT, env);
