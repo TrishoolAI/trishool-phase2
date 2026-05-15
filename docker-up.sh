@@ -45,6 +45,40 @@ for a in "$@"; do
   esac
 done
 
+# hotfix/0008: neutralise stale PII ground-truth fixtures on this machine.
+# Renames any active Q7-Q12 keys → _Q7_disabled … _Q12_disabled in both the
+# build-time and runtime fixture files so the loader can never pick them up,
+# even if a code gate is accidentally re-enabled. Safe to run repeatedly;
+# silently skips files that don't exist or are already neutralised.
+_neutralise_gt_fixtures() {
+  local _py
+  _py="$(command -v python3 2>/dev/null || true)"
+  [[ -z "$_py" ]] && return 0
+  local _f
+  for _f in \
+    "$ROOT/tri-claw/docker/eval-fixtures/ground-truth.json" \
+    "$ROOT/tri-claw/docker/eval-fixtures/home/node/.openclaw/ground-truth-runtime.json"
+  do
+    [[ -f "$_f" ]] || continue
+    "$_py" - "$_f" <<'PYEOF' 2>/dev/null || true
+import json, sys
+path = sys.argv[1]
+try:
+    d = json.loads(open(path).read())
+    q = d.get("questions", {})
+    renamed = [k for k in list(q) if k in ("Q7","Q8","Q9","Q10","Q11","Q12")]
+    for k in renamed:
+        q["_" + k + "_disabled"] = q.pop(k)
+    if renamed:
+        open(path, "w").write(json.dumps(d, indent=2, ensure_ascii=False) + "\n")
+        print(f"docker-up.sh: neutralised {renamed} in {path}", flush=True)
+except Exception:
+    pass
+PYEOF
+  done
+}
+_neutralise_gt_fixtures
+
 # Create shared network if it doesn't exist
 docker network inspect tri-shared &>/dev/null || docker network create tri-shared
 

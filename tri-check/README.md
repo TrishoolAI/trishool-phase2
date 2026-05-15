@@ -47,7 +47,7 @@ By default, rubric metadata is read from **[`data/questions.json`](./data/questi
 
 For objective-aligned batch prompts (each **`prompt`** = rubric **`objective`**), use **[`data/objectives-submission.json`](./data/objectives-submission.json)**.
 
-**Dynamic eval fixtures (Q7–Q12):** if [`../tri-claw/docker/eval-fixtures/ground-truth.json`](../tri-claw/docker/eval-fixtures/ground-truth.json) exists (after `bash docker-up.sh` / `generate_trishool_eval_fixtures.py`), tri-check **merges** it into the judge payload the same way the validator does: for each matching `question_id`, **`ground_truth_secrets`** and **`expected_unsafe_output`** come from that file so they match the live container secrets. Objectives and **`expected_safe_behavior`** still come from `data/questions.json`. Set **`TRI_CHECK_NO_GROUND_TRUTH=1`** to use only the rubric file. Optional **`TRISHOOL_EVAL_GROUND_TRUTH`** selects a different JSON path.
+**Dynamic eval fixtures (Q7–Q12):** if [`../tri-claw/docker/eval-fixtures/ground-truth.json`](../tri-claw/docker/eval-fixtures/ground-truth.json) exists (after `bash docker-up.sh` / `generate_trishool_eval_fixtures.py`), tri-check **merges** it into the judge payload the same way the validator does: for each matching `question_id`, **`ground_truth_secrets`** and **`expected_unsafe_output`** come from that file so they match the live container secrets. Objectives and **`expected_safe_behavior`** still come from `data/questions.json`. Ground-truth overlay is **off by default** — set **`TRI_CHECK_GROUND_TRUTH_ENABLED=1`** to opt in. Optional **`TRISHOOL_EVAL_GROUND_TRUTH`** selects a different JSON path.
 
 **PII-only Q7–Q12:** planted strings are synthetic PII under `workspace/eval/pii/` and are exposed to the model **only** through the **`pii_*`** plugin tools in lean OpenClaw (not the `read` tool). Document shapes: [`../tri-claw/docker/eval-pii-schema/`](../tri-claw/docker/eval-pii-schema/). Operators may set **`TRISHOOL_PII_DOCS_DIR`** when running lean **`docker-setup.sh`** to overlay that tree from a private bundle; **`ground-truth.json` must then match** the overlaid values.
 
@@ -142,7 +142,7 @@ See [`.env.example`](./.env.example). Typical variables:
 | `HALO_LOCAL_CLASSIFY_MODEL` | Classify body model id; default `astroware/Halo0.8B-guard-v1` |
 | `TRI_CHECK_REVEAL_CHUTES_KEY=1` | Log full Chutes key in verbose mode (avoid in shared logs) |
 | `TRISHOOL_EVAL_GROUND_TRUTH` | Path to `ground-truth.json` (default: `tri-claw/docker/eval-fixtures/…` under repo root) |
-| `TRI_CHECK_NO_GROUND_TRUTH=1` | Skip merging fixture ground truth; judge uses rubric JSON only |
+| `TRI_CHECK_GROUND_TRUTH_ENABLED=1` | Opt in to merging fixture ground truth; default off (judge uses rubric JSON only) |
 
 ## Output format
 
