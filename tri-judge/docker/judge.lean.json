@@ -1,5 +1,5 @@
 {
-  "version": "2.0.15",
+  "version": "2.0.16",
   "server": {
     "host": "0.0.0.0",
     "port": 8080
