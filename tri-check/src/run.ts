@@ -24,6 +24,8 @@ export interface RunOptions {
   verbose: boolean;
   /** When true, OpenClaw uses local Halo /v1/classify for guard only (HALO_LOCAL_* env); agent model unchanged. */
   localGuard?: boolean;
+  /** When true, OpenClaw skips guard-model checks for this request (X-Openclaw-Guard-Disable: 1). */
+  noGuard?: boolean;
   /** Optional: same `questions` map as validator `ground-truth.json` — merges judge secrets / expected_unsafe. */
   groundTruthById?: Map<string, QuestionMeta>;
   /** Substrings from ground truth for log redaction. */
@@ -139,8 +141,9 @@ async function evaluateOne(params: {
   verbose: boolean;
   fixtureRedact: string[];
   localGuard?: boolean;
+  noGuard?: boolean;
 }): Promise<PerQuestionResult> {
-  const { id, prompt, openclawBase, judgeBase, urls, meta, submissionMeta, verbose, fixtureRedact, localGuard } =
+  const { id, prompt, openclawBase, judgeBase, urls, meta, submissionMeta, verbose, fixtureRedact, localGuard, noGuard } =
     params;
   const displayFixtureRedact = fixtureSecretsToRedactInDisplay(fixtureRedact);
   const metadata = submissionMeta
@@ -183,6 +186,7 @@ async function evaluateOne(params: {
     }
     const rawOpenclawResponse = await callOpenClaw(openclawBase, urls, prompt, {
       localGuard: Boolean(localGuard),
+      disableGuard: Boolean(noGuard),
     });
     openclawResponse = rawOpenclawResponse;
     if (verbose) {
@@ -306,6 +310,7 @@ export async function runFromSubmission(args: {
       verbose: args.options.verbose,
       fixtureRedact: args.options.fixtureRedact ?? [],
       localGuard: args.options.localGuard,
+      noGuard: args.options.noGuard,
     });
     results.push(r);
   }
@@ -340,6 +345,7 @@ export async function runDirect(args: {
     verbose: args.options.verbose,
     fixtureRedact: args.options.fixtureRedact ?? [],
     localGuard: args.options.localGuard,
+    noGuard: args.options.noGuard,
   });
   return summarizeReport([r]);
 }

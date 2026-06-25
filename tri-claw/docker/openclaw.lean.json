@@ -42,9 +42,8 @@
         }
       },
       "tools": {
-        "allow": ["sessions_send", "trishool-eval-pii"],
+        "allow": ["sessions_send", "trishool-eval-pii", "read"],
         "deny": [
-          "read",
           "write",
           "edit",
           "apply_patch",

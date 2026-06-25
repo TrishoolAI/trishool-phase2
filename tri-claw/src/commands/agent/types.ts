@@ -98,5 +98,6 @@ export type AgentCommandOpts = {
     classifyUrl?: string;
     classifyModel?: string;
     skipClassifyAuth?: boolean;
+    disable?: boolean;
   };
 };

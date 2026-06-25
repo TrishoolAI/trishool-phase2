@@ -6,6 +6,8 @@ const RATE_LIMIT_HINT_RE = /(?:^|\b)(?:http\s*429|429\b|rate limit|too many requ
 export type CallOpenClawOptions = {
   /** Route guard-model classify to local Halo (OpenClaw reads these headers; main model still uses Chutes if configured). */
   localGuard?: boolean;
+  /** Skip guard-model input/output checks for this request only. */
+  disableGuard?: boolean;
 };
 
 function authHeaders(urls: ResolvedServiceUrls, options?: CallOpenClawOptions): Record<string, string> {
@@ -21,6 +23,9 @@ function authHeaders(urls: ResolvedServiceUrls, options?: CallOpenClawOptions): 
   }
   if (options?.localGuard) {
     Object.assign(headers, openClawLocalGuardHeaders());
+  }
+  if (options?.disableGuard) {
+    headers["X-Openclaw-Guard-Disable"] = "1";
   }
   return headers;
 }

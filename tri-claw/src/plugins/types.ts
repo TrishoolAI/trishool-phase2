@@ -373,6 +373,8 @@ export type GuardClassifyHttpOverrides = {
   classifyModel?: string;
   /** When true, omit Bearer on POST /v1/classify (local guard server). */
   skipClassifyAuth?: boolean;
+  /** When true, skip guard-model input/output checks for this run only. */
+  disable?: boolean;
 };
 
 // wrap_stream_fn hook
