@@ -330,7 +330,7 @@ build_image() {
     echo "    (docker build --no-cache)"
   fi
   docker build \
-    "${cache_args[@]}" \
+    ${cache_args[@]+"${cache_args[@]}"} \
     --build-arg "OPENCLAW_DOCKER_APT_PACKAGES=${OPENCLAW_DOCKER_APT_PACKAGES}" \
     -t "$IMAGE_NAME" \
     -f "$DOCKERFILE" \
