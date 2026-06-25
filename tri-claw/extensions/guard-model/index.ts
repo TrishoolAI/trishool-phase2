@@ -860,7 +860,11 @@ export default function register(api: OpenClawPluginApi) {
     const guardClassifyOverrides = event.guardClassifyOverrides;
     const wrapped = ((model, context, options) => {
       const liveCfg = loadLiveGuardConfig(api, mergedOpenClawConfig);
-      if ((ctx.sessionId ?? "").startsWith(GUARD_SESSION_PREFIX) || liveCfg.enabled === false) {
+      if (
+        (ctx.sessionId ?? "").startsWith(GUARD_SESSION_PREFIX) ||
+        liveCfg.enabled === false ||
+        guardClassifyOverrides?.disable
+      ) {
         return event.streamFn(model, context, options);
       }
 

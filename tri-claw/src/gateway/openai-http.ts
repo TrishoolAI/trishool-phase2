@@ -67,13 +67,18 @@ function resolveGuardClassifyOverridesFromRequest(req: IncomingMessage): GuardCl
   const rawModel = req.headers["x-openclaw-guard-classify-model"];
   const classifyModel = (typeof rawModel === "string" ? rawModel : rawModel?.[0])?.trim();
 
-  if (!skipClassifyAuth && !classifyUrl && !classifyModel) {
+  const rawDisable = req.headers["x-openclaw-guard-disable"];
+  const disableVal = Array.isArray(rawDisable) ? rawDisable[0] : rawDisable;
+  const disable = typeof disableVal === "string" && disableVal.trim() === "1";
+
+  if (!skipClassifyAuth && !classifyUrl && !classifyModel && !disable) {
     return undefined;
   }
   return {
     skipClassifyAuth: skipClassifyAuth || undefined,
     classifyUrl: classifyUrl || undefined,
     classifyModel: classifyModel || undefined,
+    disable: disable || undefined,
   };
 }
 
@@ -165,7 +170,8 @@ function buildAgentCommandInput(params: {
     ...(params.guardClassifyOverrides &&
       (params.guardClassifyOverrides.classifyUrl ||
         params.guardClassifyOverrides.classifyModel ||
-        params.guardClassifyOverrides.skipClassifyAuth) && {
+        params.guardClassifyOverrides.skipClassifyAuth ||
+        params.guardClassifyOverrides.disable) && {
         guardClassifyOverrides: params.guardClassifyOverrides,
       }),
   };

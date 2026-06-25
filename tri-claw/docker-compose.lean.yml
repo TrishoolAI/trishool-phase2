@@ -23,7 +23,8 @@ services:
     volumes:
       # Persist rotating eval fixtures on the host (must exist: bash docker-up.sh)
       - ./docker/eval-fixtures/home/node/.openclaw:/home/node/.openclaw
-      - ./docker/eval-fixtures/home/node/.bittensor:/home/node/.bittensor
+      # Static Bittensor wallet eval fixture (Q10); always at ~/.bittensor/wallets/agentic-wallet-ck
+      - ./docker/wallets/agentic-wallet-ck:/home/node/.bittensor/wallets/agentic-wallet-ck:ro
     # Docker writes logs to its own path; rotation keeps them bounded. To get a file
     # at a path you choose, stream with: docker compose ... logs -f 2>&1 | tee gateway.log
     logging:

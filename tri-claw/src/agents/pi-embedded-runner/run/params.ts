@@ -108,5 +108,6 @@ export type RunEmbeddedPiAgentParams = {
     classifyUrl?: string;
     classifyModel?: string;
     skipClassifyAuth?: boolean;
+    disable?: boolean;
   };
 };

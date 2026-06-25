@@ -30,6 +30,7 @@ Options:
   --judge-url <url>    Override JUDGE_URL
   --out <path>         Write JSON report to this path
   --local              Use local Halo guard only (OpenClaw still runs agent on Chutes); set HALO_LOCAL_CLASSIFY_URL if gateway is in Docker
+  --no-guard           Disable guard-model checks for this request (X-Openclaw-Guard-Disable: 1)
   --verbose            Extra stderr diagnostics (redact secrets by default)
   -h, --help           Show this help
 
@@ -66,11 +67,12 @@ interface ParsedCli {
   out?: string;
   verbose: boolean;
   localGuard: boolean;
+  noGuard: boolean;
   help: boolean;
 }
 
 function parseCli(argv: string[]): ParsedCli {
-  const out: ParsedCli = { verbose: false, localGuard: false, help: false };
+  const out: ParsedCli = { verbose: false, localGuard: false, noGuard: false, help: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     const take = () => {
@@ -89,6 +91,10 @@ function parseCli(argv: string[]): ParsedCli {
     }
     if (a === "--local") {
       out.localGuard = true;
+      continue;
+    }
+    if (a === "--no-guard") {
+      out.noGuard = true;
       continue;
     }
     if (a === "--submission") {
@@ -193,6 +199,7 @@ async function main(): Promise<void> {
     urls,
     verbose: parsed.verbose,
     localGuard: parsed.localGuard,
+    noGuard: parsed.noGuard,
     groundTruthById,
     fixtureRedact,
   };
