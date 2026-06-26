@@ -35,15 +35,6 @@ export type AppConfig = {
     maxRetries: number;
     temperature?: number;
     maxOutputTokens?: number;
-    /** Optional second-layer consistency verifier (meta-judge). Off unless explicitly enabled. */
-    verify?: {
-      enabled: boolean;
-      /** Defaults to the first model in the judge chain. */
-      model?: string;
-      maxOutputTokens?: number;
-      /** Retries on bad verifier JSON or transient upstream errors. Defaults to judge.maxRetries. */
-      maxRetries?: number;
-    };
   };
   logging?: {
     level?: string;
