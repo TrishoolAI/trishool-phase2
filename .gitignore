@@ -59,3 +59,7 @@ halo-guard-classify-smoke.py
 
 # Local simulation / scratch test scripts
 test_timeout_simulation.py
+tri-check@0.1.0
+tsx
+tri-claw/nav/with_guard.md
+tri-claw/nav/without_guard.md
