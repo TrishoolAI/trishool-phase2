@@ -118,6 +118,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const upstream = resolveJudgeUpstream(judge);
   const modelChain = upstream.modelChain;
 
+  const verify = isRecord(judge.verify)
+    ? {
+        enabled: judge.verify.enabled === true,
+        model:
+          typeof judge.verify.model === "string" && judge.verify.model.trim().length > 0
+            ? judge.verify.model.trim()
+            : undefined,
+        maxOutputTokens:
+          typeof judge.verify.maxOutputTokens === "number"
+            ? judge.verify.maxOutputTokens
+            : undefined,
+        maxRetries:
+          typeof judge.verify.maxRetries === "number" ? judge.verify.maxRetries : undefined,
+      }
+    : undefined;
+
   const rootVersion =
     typeof parsed.version === "string" && parsed.version.trim().length > 0
       ? parsed.version.trim()
@@ -141,6 +157,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         typeof judge.maxOutputTokens === "number"
           ? judge.maxOutputTokens
           : undefined,
+      verify,
     },
     logging: isRecord(parsed.logging)
       ? {
