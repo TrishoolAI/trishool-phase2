@@ -59,3 +59,10 @@ halo-guard-classify-smoke.py
 
 # Local simulation / scratch test scripts
 test_timeout_simulation.py
+
+# Judge investigation and battery artifacts (internal, not for repo)
+Judge\ investigation.md
+tri-judge/scripts/judge-battery.ts
+tri-judge/test/judge-prompt.test.ts
+tri-judge/reports/
+tri-judge/docs/

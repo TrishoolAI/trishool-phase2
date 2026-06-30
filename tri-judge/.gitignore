@@ -1,3 +1,9 @@
+# Battery test artifacts (internal, not for repo)
+scripts/judge-battery.ts
+test/judge-prompt.test.ts
+reports/
+docs/
+
 # Logs
 logs
 *.log
