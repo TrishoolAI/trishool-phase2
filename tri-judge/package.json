@@ -12,7 +12,8 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integration": "tsx scripts/integration-chutes.ts"
+    "test:integration": "tsx scripts/integration-chutes.ts",
+    "test:battery": "tsx scripts/judge-battery.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
