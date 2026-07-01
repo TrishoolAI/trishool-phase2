@@ -8,6 +8,7 @@ import { JudgeClient } from "./judge-client.js";
 const MISSING_UPSTREAM_API_KEY =
   "Missing upstream API key. Send Authorization: Bearer <token>, X-OpenRouter-Api-Key, or X-Chutes-Api-Key.";
 
+
 /** Per-request secret forwarded to the LLM as `Authorization: Bearer` (Chutes + OpenRouter compatible). */
 function resolveUpstreamApiKeyFromHeaders(
   headers: Record<string, string | string[] | undefined>,
