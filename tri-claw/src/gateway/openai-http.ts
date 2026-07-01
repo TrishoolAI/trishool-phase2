@@ -322,7 +322,7 @@ function resolveAgentResponseText(result: unknown): string {
   }
   const payloads = typed?.payloads;
   if (!Array.isArray(payloads) || payloads.length === 0) {
-    return "No response from OpenClaw.";
+    throw new Error("No response from OpenClaw.");
   }
   const errorParts = payloads.filter((p) => p.isError === true);
   if (errorParts.length > 0) {
@@ -343,11 +343,13 @@ function resolveAgentResponseText(result: unknown): string {
     .map((p) => (typeof p.text === "string" ? p.text : ""))
     .filter(Boolean)
     .join("\n\n");
-  const raw = content || "No response from OpenClaw.";
-  if (isLikelyHttpErrorText(raw)) {
-    return formatRawAssistantErrorForUi(raw);
+  if (!content) {
+    throw new Error("No response from OpenClaw.");
   }
-  return raw;
+  if (isLikelyHttpErrorText(content)) {
+    return formatRawAssistantErrorForUi(content);
+  }
+  return content;
 }
 
 export async function handleOpenAiHttpRequest(
