@@ -35,5 +35,29 @@ describe("openai-http-guard-refusal", () => {
         prefixes,
       ),
     ).toBe(true);
+    expect(isGuardPolicyRefusalText("Blocked by input guard model. jailbreak", prefixes)).toBe(
+      true,
+    );
+    expect(isGuardPolicyRefusalText("Blocked by output guard model. Illegal Acts", prefixes)).toBe(
+      true,
+    );
+  });
+
+  it("matches per-phase refusalText overrides", () => {
+    const cfg = {
+      plugins: {
+        entries: {
+          "guard-model": {
+            config: {
+              input: { refusalText: "Input deny." },
+              output: { refusalText: "Output deny." },
+            },
+          },
+        },
+      },
+    } as OpenClawConfig;
+    const prefixes = collectGuardRefusalPrefixes(cfg);
+    expect(isGuardPolicyRefusalText("Input deny. reason", prefixes)).toBe(true);
+    expect(isGuardPolicyRefusalText("Output deny. reason", prefixes)).toBe(true);
   });
 });

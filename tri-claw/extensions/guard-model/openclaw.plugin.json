@@ -66,6 +66,9 @@
           "enabled": { "type": "boolean" },
           "model": { "type": "string" },
           "authProfileId": { "type": "string" },
+          "classifyUrl": { "type": "string" },
+          "classifyModel": { "type": "string" },
+          "refusalText": { "type": "string" },
           "payloadMode": {
             "type": "string",
             "enum": ["full_context", "latest_user_message"]
@@ -83,6 +86,9 @@
           "enabled": { "type": "boolean" },
           "model": { "type": "string" },
           "authProfileId": { "type": "string" },
+          "classifyUrl": { "type": "string" },
+          "classifyModel": { "type": "string" },
+          "refusalText": { "type": "string" },
           "payloadMode": {
             "type": "string",
             "enum": ["full_context", "latest_user_message"]

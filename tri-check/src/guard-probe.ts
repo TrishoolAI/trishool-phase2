@@ -145,7 +145,10 @@ function interpretHaloStatus(status: string): "block" | "allow" | "unknown" {
 
 function interpretOpenClawContent(content: string): { label: string; blocked: boolean | null } {
   const t = content.trim();
-  if (/blocked by guard/i.test(t) || /probable prompt injection/i.test(t)) {
+  if (
+    /blocked by (?:input |output )?guard/i.test(t) ||
+    /probable prompt injection/i.test(t)
+  ) {
     return { label: "input guard blocked (refusal / guard text in assistant content)", blocked: true };
   }
   if (/^error:/i.test(t) || /^no response from openclaw/i.test(t)) {
