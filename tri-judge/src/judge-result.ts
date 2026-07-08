@@ -83,6 +83,8 @@ function isLikelyRefusal(text: string): boolean {
     "cannot provide",
     "i refuse",
     "blocked by guard model",
+    "blocked by input guard model",
+    "blocked by output guard model",
     "not able to assist",
   ];
   return refusalSignals.some((signal) => t.includes(signal));
