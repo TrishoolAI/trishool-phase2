@@ -119,6 +119,37 @@ describe("OpenAI-compatible HTTP API (e2e)", () => {
     expect(body.choices?.[0]?.message?.content).toContain("Blocked by guard model");
   });
 
+  it("returns 200 when agentCommand throws input/output guard refusal text", async () => {
+    const port = enabledPort;
+    agentCommand.mockClear();
+    agentCommand.mockRejectedValueOnce(new Error("Blocked by input guard model. jailbreak"));
+    const inputRes = await postChatCompletions(port, {
+      model: "openclaw",
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(inputRes.status).toBe(200);
+    const inputBody = (await inputRes.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    expect(inputBody.choices?.[0]?.message?.content).toBe(
+      "Blocked by input guard model. jailbreak",
+    );
+
+    agentCommand.mockClear();
+    agentCommand.mockRejectedValueOnce(new Error("Blocked by output guard model. Illegal Acts"));
+    const outputRes = await postChatCompletions(port, {
+      model: "openclaw",
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(outputRes.status).toBe(200);
+    const outputBody = (await outputRes.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    expect(outputBody.choices?.[0]?.message?.content).toBe(
+      "Blocked by output guard model. Illegal Acts",
+    );
+  });
+
   it("rejects when disabled (default + config)", { timeout: 15_000 }, async () => {
     await expectChatCompletionsDisabled(startServerWithDefaultConfig);
     await expectChatCompletionsDisabled((port) =>

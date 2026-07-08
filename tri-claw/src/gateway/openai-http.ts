@@ -442,6 +442,24 @@ export async function handleOpenAiHttpRequest(
     } catch (err) {
       logWarn(`openai-compat: chat completion failed: ${String(err)}`);
       const message = err instanceof Error ? err.message : String(err);
+      const refusalPrefixes = collectGuardRefusalPrefixes(loadConfig());
+      if (isGuardPolicyRefusalText(message, refusalPrefixes)) {
+        sendJson(res, 200, {
+          id: runId,
+          object: "chat.completion",
+          created: Math.floor(Date.now() / 1000),
+          model,
+          choices: [
+            {
+              index: 0,
+              message: { role: "assistant", content: message },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+        });
+        return true;
+      }
       sendJson(res, 502, {
         error: {
           message: message || "bad_gateway",

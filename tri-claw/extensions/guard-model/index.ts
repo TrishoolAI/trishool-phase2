@@ -23,6 +23,8 @@ const GUARD_SESSION_PREFIX = "guard-check:";
 const DEFAULT_TIMEOUT_MS = 20_000;
 const DEFAULT_MAX_PAYLOAD_CHARS = 32_000;
 const DEFAULT_REFUSAL_TEXT = "Blocked by guard model: probable prompt injection detected.";
+const DEFAULT_INPUT_REFUSAL_TEXT = "Blocked by input guard model.";
+const DEFAULT_OUTPUT_REFUSAL_TEXT = "Blocked by output guard model.";
 
 type RunEmbeddedPiAgentFn = (params: Record<string, unknown>) => Promise<unknown>;
 
@@ -32,6 +34,12 @@ type GuardScopeConfig = {
   enabled?: boolean;
   model?: string;
   authProfileId?: string;
+  /** Per-phase classify API URL (`chutes_classify`); falls back to top-level `classifyUrl`. */
+  classifyUrl?: string;
+  /** Per-phase classify model name (`chutes_classify`); falls back to `model`, then top-level `classifyModel`. */
+  classifyModel?: string;
+  /** Per-phase refusal prefix; falls back to top-level `refusalText`, then phase default. */
+  refusalText?: string;
   payloadMode?: "full_context" | "latest_user_message";
   queryMode?: GuardQueryMode;
 };
@@ -319,6 +327,32 @@ function parseGuardDecisionText(
   throw new Error(`guard model returned invalid decision: ${text.slice(0, 120)}`);
 }
 
+function trimOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value.trim() || undefined : undefined;
+}
+
+function normalizeScopeConfig(
+  scope: Record<string, unknown> | undefined,
+  queryModeFrom: (raw: unknown) => GuardQueryMode | undefined,
+): GuardScopeConfig | undefined {
+  if (!scope) {
+    return undefined;
+  }
+  return {
+    enabled: typeof scope.enabled === "boolean" ? scope.enabled : undefined,
+    model: trimOptionalString(scope.model),
+    authProfileId: trimOptionalString(scope.authProfileId),
+    classifyUrl: trimOptionalString(scope.classifyUrl),
+    classifyModel: trimOptionalString(scope.classifyModel),
+    refusalText: trimOptionalString(scope.refusalText),
+    payloadMode:
+      scope.payloadMode === "full_context" || scope.payloadMode === "latest_user_message"
+        ? scope.payloadMode
+        : undefined,
+    queryMode: queryModeFrom(scope.queryMode),
+  };
+}
+
 function normalizeGuardConfig(value: unknown): GuardPluginConfig {
   if (!isRecord(value)) {
     return {};
@@ -347,36 +381,8 @@ function normalizeGuardConfig(value: unknown): GuardPluginConfig {
       typeof value.refusalText === "string" ? value.refusalText.trim() || undefined : undefined,
     logDecisions: typeof value.logDecisions === "boolean" ? value.logDecisions : undefined,
     logRawResponses: typeof value.logRawResponses === "boolean" ? value.logRawResponses : undefined,
-    input: input
-      ? {
-          enabled: typeof input.enabled === "boolean" ? input.enabled : undefined,
-          model: typeof input.model === "string" ? input.model.trim() || undefined : undefined,
-          authProfileId:
-            typeof input.authProfileId === "string"
-              ? input.authProfileId.trim() || undefined
-              : undefined,
-          payloadMode:
-            input.payloadMode === "full_context" || input.payloadMode === "latest_user_message"
-              ? input.payloadMode
-              : undefined,
-          queryMode: queryModeFrom(input.queryMode),
-        }
-      : undefined,
-    output: output
-      ? {
-          enabled: typeof output.enabled === "boolean" ? output.enabled : undefined,
-          model: typeof output.model === "string" ? output.model.trim() || undefined : undefined,
-          authProfileId:
-            typeof output.authProfileId === "string"
-              ? output.authProfileId.trim() || undefined
-              : undefined,
-          payloadMode:
-            output.payloadMode === "full_context" || output.payloadMode === "latest_user_message"
-              ? output.payloadMode
-              : undefined,
-          queryMode: queryModeFrom(output.queryMode),
-        }
-      : undefined,
+    input: normalizeScopeConfig(input, queryModeFrom),
+    output: normalizeScopeConfig(output, queryModeFrom),
     policy: normalizeGuardPolicyConfig(value.policy),
   };
 }
@@ -400,6 +406,9 @@ function resolveScopeConfig(
   enabled: boolean;
   model?: string;
   authProfileId?: string;
+  classifyUrl?: string;
+  classifyModel?: string;
+  refusalText?: string;
   payloadMode?: "full_context" | "latest_user_message";
   queryMode?: GuardQueryMode;
 } {
@@ -408,16 +417,41 @@ function resolveScopeConfig(
     enabled: cfg.enabled !== false && (scope?.enabled ?? true),
     model: scope?.model ?? cfg.model,
     authProfileId: scope?.authProfileId ?? cfg.authProfileId,
+    classifyUrl: scope?.classifyUrl ?? cfg.classifyUrl,
+    classifyModel: scope?.classifyModel ?? scope?.model ?? cfg.classifyModel ?? cfg.model,
+    refusalText: scope?.refusalText ?? cfg.refusalText,
     payloadMode: scope?.payloadMode ?? "full_context",
     queryMode: scope?.queryMode ?? cfg.queryMode,
   };
 }
 
+function isChutesClassifyTransport(cfg: GuardPluginConfig): boolean {
+  return cfg.transport === "chutes_classify";
+}
+
+function resolveClassifyEndpoint(
+  cfg: GuardPluginConfig,
+  phase: "input" | "output",
+): { url?: string; model?: string } {
+  const scope = resolveScopeConfig(cfg, phase);
+  return {
+    url: scope.classifyUrl?.trim() || undefined,
+    model: scope.classifyModel?.trim() || undefined,
+  };
+}
+
+function isClassifyPhaseConfigured(cfg: GuardPluginConfig, phase: "input" | "output"): boolean {
+  if (!isChutesClassifyTransport(cfg)) {
+    return false;
+  }
+  const { url, model } = resolveClassifyEndpoint(cfg, phase);
+  return Boolean(url && model);
+}
+
 function isChutesClassifyConfigured(cfg: GuardPluginConfig): boolean {
   return (
-    cfg.transport === "chutes_classify" &&
-    Boolean(cfg.classifyUrl?.trim()) &&
-    Boolean(cfg.classifyModel?.trim())
+    isChutesClassifyTransport(cfg) &&
+    (isClassifyPhaseConfigured(cfg, "input") || isClassifyPhaseConfigured(cfg, "output"))
   );
 }
 
@@ -427,8 +461,8 @@ function guardPhaseShouldRun(cfg: GuardPluginConfig, phase: "input" | "output"):
   if (!scope.enabled) {
     return false;
   }
-  if (isChutesClassifyConfigured(cfg)) {
-    return true;
+  if (isChutesClassifyTransport(cfg)) {
+    return isClassifyPhaseConfigured(cfg, phase);
   }
   return Boolean(scope.model?.trim());
 }
@@ -507,8 +541,24 @@ function parseChutesClassifyResponse(json: unknown): GuardDecision {
   if (statusRaw === "HARMFUL") {
     return { decision: "block", reason };
   }
-  if (statusRaw === "HARMLESS") {
-    return { decision: "allow", reason: category || reason };
+  // HaloQwen output guard may emit CONTROVERSIAL / SENSITIVE (non-block tiers).
+  if (
+    statusRaw === "HARMLESS" ||
+    statusRaw === "CONTROVERSIAL" ||
+    statusRaw === "SENSITIVE"
+  ) {
+    return { decision: "allow", reason: category || reason || statusRaw.toLowerCase() };
+  }
+  // Fallback: some deploy variants put the tier only on safety_label / risk_level.
+  const tierRaw =
+    (typeof json.safety_label === "string" ? json.safety_label : undefined) ??
+    (typeof json.risk_level === "string" ? json.risk_level : undefined);
+  const tier = typeof tierRaw === "string" ? tierRaw.trim().toLowerCase() : "";
+  if (tier === "unsafe") {
+    return { decision: "block", reason: reason || tierRaw };
+  }
+  if (tier === "safe" || tier === "controversial" || tier === "sensitive") {
+    return { decision: "allow", reason: category || reason || tier };
   }
   throw new Error(`classify response missing or unknown status: ${statusRaw || "(empty)"}`);
 }
@@ -535,10 +585,11 @@ async function runChutesClassifyGuardCheck(params: {
   payload: unknown;
   overrides?: GuardClassifyHttpOverrides;
 }): Promise<GuardDecision> {
-  const url = (params.overrides?.classifyUrl?.trim() || params.cfg.classifyUrl)?.trim();
-  const classifyModel = (params.overrides?.classifyModel?.trim() || params.cfg.classifyModel)?.trim();
+  const scope = resolveScopeConfig(params.cfg, params.phase);
+  const url = (params.overrides?.classifyUrl?.trim() || scope.classifyUrl)?.trim();
+  const classifyModel = (params.overrides?.classifyModel?.trim() || scope.classifyModel)?.trim();
   if (!url || !classifyModel) {
-    throw new Error("chutes_classify requires classifyUrl and classifyModel");
+    throw new Error(`chutes_classify requires classifyUrl and classifyModel for ${params.phase}`);
   }
   let apiKey = "";
   if (!params.overrides?.skipClassifyAuth) {
@@ -675,7 +726,7 @@ async function runGuardCheck(params: {
   if (!guardPhaseShouldRun(cfg, params.phase)) {
     return { decision: "allow" };
   }
-  if (isChutesClassifyConfigured(cfg)) {
+  if (isChutesClassifyTransport(cfg)) {
     const decision = await runChutesClassifyGuardCheck({
       api: params.api,
       openClawConfig: liveConfig,
@@ -805,8 +856,20 @@ function extractLatestAssistantText(event: unknown): string | undefined {
   return extractAssistantText(event.message);
 }
 
-function buildBlockErrorMessage(cfg: GuardPluginConfig, reason?: string): string {
-  const prefix = cfg.refusalText?.trim() || DEFAULT_REFUSAL_TEXT;
+function resolveRefusalText(cfg: GuardPluginConfig, phase: "input" | "output"): string {
+  const scoped = resolveScopeConfig(cfg, phase).refusalText?.trim();
+  if (scoped) {
+    return scoped;
+  }
+  return phase === "input" ? DEFAULT_INPUT_REFUSAL_TEXT : DEFAULT_OUTPUT_REFUSAL_TEXT;
+}
+
+function buildBlockErrorMessage(
+  cfg: GuardPluginConfig,
+  reason?: string,
+  phase: "input" | "output" = "input",
+): string {
+  const prefix = resolveRefusalText(cfg, phase) || DEFAULT_REFUSAL_TEXT;
   return reason ? `${prefix} ${reason}` : prefix;
 }
 
@@ -850,6 +913,8 @@ export const __testing = {
   guardPhaseShouldRun,
   buildClassifyQueryString,
   isChutesClassifyConfigured,
+  isChutesClassifyTransport,
+  resolveClassifyEndpoint,
   resolveChutesApiKeyForGuard,
   isGuardConnectivityFailure,
 };
@@ -888,7 +953,9 @@ export default function register(api: OpenClawPluginApi) {
               guardClassifyOverrides,
             });
             if (inputDecision.decision === "block") {
-              throw new SuppressModelFallbackError(buildBlockErrorMessage(liveCfg, inputDecision.reason));
+              throw new SuppressModelFallbackError(
+                buildBlockErrorMessage(liveCfg, inputDecision.reason, "input"),
+              );
             }
           }
 
@@ -931,7 +998,9 @@ export default function register(api: OpenClawPluginApi) {
               guardClassifyOverrides,
             });
             if (outputDecision.decision === "block") {
-              throw new SuppressModelFallbackError(buildBlockErrorMessage(liveCfg, outputDecision.reason));
+              throw new SuppressModelFallbackError(
+                buildBlockErrorMessage(liveCfg, outputDecision.reason, "output"),
+              );
             }
           }
 
