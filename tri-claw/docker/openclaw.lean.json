@@ -80,8 +80,6 @@
           "enabled": true,
           "timeoutMs": 30000,
           "transport": "chutes_classify",
-          "classifyUrl": "https://astroboi-halo-guard.chutes.ai/v1/classify",
-          "classifyModel": "halo-guard",
           "queryMode": "text_extract",
           "logDecisions": true,
           "policy": {
@@ -95,15 +93,20 @@
           },
           "input": {
             "enabled": true,
+            "classifyUrl": "https://astroboi-halo-guard.chutes.ai/v1/classify",
+            "classifyModel": "halo-guard",
             "payloadMode": "latest_user_message",
-            "queryMode": "text_extract"
+            "queryMode": "text_extract",
+            "refusalText": "Blocked by input guard model."
           },
           "output": {
             "enabled": true,
+            "classifyUrl": "https://astroboi-haloqwen-output-guard.chutes.ai/v1/classify",
+            "classifyModel": "haloqwen-output-guard",
             "payloadMode": "full_context",
-            "queryMode": "text_extract"
-          },
-          "refusalText": "Blocked by guard model."
+            "queryMode": "text_extract",
+            "refusalText": "Blocked by output guard model."
+          }
         }
       }
     }
