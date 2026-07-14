@@ -18,18 +18,31 @@ describe("guard-model helpers", () => {
       enabled: true,
       model: "chutes/input",
       authProfileId: "input",
+      classifyUrl: undefined,
+      classifyModel: "chutes/input",
+      refusalText: undefined,
       payloadMode: "full_context",
       queryMode: undefined,
     });
   });
 
   it("builds a stable block message", () => {
-    expect(__testing.buildBlockErrorMessage({}, "reason here")).toContain(
-      "probable prompt injection detected.",
+    expect(__testing.buildBlockErrorMessage({}, "reason here", "input")).toBe(
+      "Blocked by input guard model. reason here",
     );
-    expect(__testing.buildBlockErrorMessage({ refusalText: "Guard blocked." }, "reason here")).toBe(
-      "Guard blocked. reason here",
+    expect(__testing.buildBlockErrorMessage({}, "reason here", "output")).toBe(
+      "Blocked by output guard model. reason here",
     );
+    expect(
+      __testing.buildBlockErrorMessage(
+        { input: { refusalText: "Custom input deny." } },
+        "reason here",
+        "input",
+      ),
+    ).toBe("Custom input deny. reason here");
+    expect(
+      __testing.buildBlockErrorMessage({ refusalText: "Guard blocked." }, "reason here", "output"),
+    ).toBe("Guard blocked. reason here");
   });
 
   it("truncates oversized guard payloads", () => {
@@ -121,6 +134,26 @@ describe("guard-model helpers", () => {
       decision: "allow",
       reason: "none",
     });
+    expect(
+      __testing.parseChutesClassifyResponse({
+        status: "CONTROVERSIAL",
+        safety_label: "Controversial",
+        category: "none",
+      }),
+    ).toEqual({
+      decision: "allow",
+      reason: "none",
+    });
+    expect(
+      __testing.parseChutesClassifyResponse({
+        status: "weird",
+        risk_level: "Unsafe",
+        category: "Illegal Acts",
+      }),
+    ).toEqual({
+      decision: "block",
+      reason: "Illegal Acts",
+    });
   });
 
   it("guardPhaseShouldRun uses classify URL when transport is chutes_classify", () => {
@@ -141,6 +174,49 @@ describe("guard-model helpers", () => {
         "input",
       ),
     ).toBe(false);
+    expect(
+      __testing.guardPhaseShouldRun(
+        {
+          enabled: true,
+          transport: "chutes_classify",
+          input: {
+            enabled: true,
+            classifyUrl: "https://input-only.example/v1/classify",
+            classifyModel: "input-guard",
+          },
+        },
+        "input",
+      ),
+    ).toBe(true);
+  });
+
+  it("resolves per-phase classifyUrl and classifyModel for chutes_classify", () => {
+    const cfg = {
+      enabled: true,
+      transport: "chutes_classify" as const,
+      classifyUrl: "https://default.example/v1/classify",
+      classifyModel: "default-model",
+      input: {
+        enabled: true,
+        classifyUrl: "https://input-guard.example/v1/classify",
+        classifyModel: "input-model",
+      },
+      output: {
+        enabled: true,
+        classifyUrl: "https://output-guard.example/v1/classify",
+        model: "output-model",
+      },
+    };
+    expect(__testing.resolveClassifyEndpoint(cfg, "input")).toEqual({
+      url: "https://input-guard.example/v1/classify",
+      model: "input-model",
+    });
+    expect(__testing.resolveClassifyEndpoint(cfg, "output")).toEqual({
+      url: "https://output-guard.example/v1/classify",
+      model: "output-model",
+    });
+    expect(__testing.guardPhaseShouldRun(cfg, "input")).toBe(true);
+    expect(__testing.guardPhaseShouldRun(cfg, "output")).toBe(true);
   });
 
   it("buildClassifyQueryString text_extract uses assistantText for output", () => {
