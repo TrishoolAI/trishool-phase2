@@ -95,7 +95,7 @@ class Validator(BaseValidatorNeuron):
         platform_api_url = os.getenv("PLATFORM_API_URL", "https://api.trishool.ai")
         coldkey_name = self.config.wallet.name
         hotkey_name = self.config.wallet.hotkey
-        network = self.config.subtensor.network
+        network = self.config.network
         netuid = self.config.netuid
         self.api_client = PlatformAPIClient(
             platform_api_url=platform_api_url,

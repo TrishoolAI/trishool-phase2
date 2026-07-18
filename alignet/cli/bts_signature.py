@@ -4,6 +4,8 @@ from typing import Any
 import argparse
 
 import bittensor as bt
+from bittensor.wallet import Wallet
+from bittensor.keyfiles import Keypair, KeyfileError
 import typer
 from rich.console import Console
 
@@ -17,16 +19,16 @@ CHALLENGE_TTL_SECONDS = 120
 ########################################################################################################################
 
 
-def get_wallet(name: str, hotkey: str) -> bt.wallet:
+def get_wallet(name: str, hotkey: str) -> Wallet:
     if bt is None:  # pragma: no cover
         raise RuntimeError("bittensor is not installed")
-    return bt.wallet(name=name, hotkey=hotkey)
+    return Wallet(name=name, hotkey=hotkey)
 
 
-def load_wallet(wallet_name: str, wallet_hotkey: str) -> bt.wallet:
+def load_wallet(wallet_name: str, wallet_hotkey: str) -> Wallet:
     try:
         wallet = get_wallet(wallet_name, wallet_hotkey)
-    except bt.KeyFileError as exc:
+    except KeyfileError as exc:
         console.log(
             "[bold red]Missing hotkey files[/] "
             f"for wallet '{wallet_name}/{wallet_hotkey}'. Import or create the wallet before retrying."
@@ -57,7 +59,7 @@ def build_pair_auth_payload(
     message_bytes = message.encode("utf-8")
     signature_bytes = wallet.hotkey.sign(message_bytes)
 
-    verifier_keypair = bt.Keypair(ss58_address=wallet.hotkey.ss58_address)
+    verifier_keypair = Keypair(ss58_address=wallet.hotkey.ss58_address)
     if not verifier_keypair.verify(message_bytes, signature_bytes):
         console.log("[bold red]Unable to verify the ownership signature locally.[/]")
         raise typer.Exit(code=1)

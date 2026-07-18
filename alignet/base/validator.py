@@ -30,10 +30,6 @@ from typing import List, Union
 from traceback import print_exception
 
 from alignet.base.neuron import BaseNeuron
-from alignet.base.utils.weight_utils import (
-    process_weights_for_netuid,
-    convert_weights_and_uids_for_emit,
-)  # TODO: Replace when bittensor switches to numpy
 from alignet.utils.config import add_validator_args
 from alignet.utils.logging import get_logger
 from alignet.utils.telegram import send_error_safe
@@ -57,22 +53,12 @@ class BaseValidatorNeuron(BaseNeuron):
         # Save a copy of the hotkeys to local memory.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
-        # Dendrite lets us send messages to other nodes (axons) in the network.
-        self.dendrite = bt.dendrite(wallet=self.wallet)
-        logger.info(f"Dendrite: {self.dendrite}")
-
         # Set up initial scoring weights for validation
         logger.info("Building validation weights.")
-        self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
+        self.scores = np.zeros(len(self.metagraph), dtype=np.float32)
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
-
-        # Serve axon to enable external connections.
-        if not self.config.neuron.axon_off:
-            self.serve_axon()
-        else:
-            logger.warning("axon off, not serving ip to chain.")
 
         # Create asyncio event loop to manage async tasks.
         # Use get_event_loop() for Python < 3.10, or get_event_loop_policy() for >= 3.10
@@ -92,42 +78,6 @@ class BaseValidatorNeuron(BaseNeuron):
         self.is_running: bool = False
         self.thread: Union[threading.Thread, None] = None
         self.lock = asyncio.Lock()
-
-    def serve_axon(self):
-        """Serve axon to enable external connections."""
-        logger.info("serving ip to chain...")
-        try:
-            self.axon = bt.axon(wallet=self.wallet, config=self.config)
-            hotkey = self.wallet.hotkey.ss58_address if hasattr(self, 'wallet') and self.wallet else ""
-
-            try:
-                self.subtensor.serve_axon(
-                    netuid=self.config.netuid,
-                    axon=self.axon,
-                )
-                logger.info(
-                    f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
-                )
-            except Exception as e:
-                error_msg = f"Failed to serve Axon with exception: {e}"
-                logger.error(error_msg)
-                send_error_safe(
-                    error_message=error_msg,
-                    hotkey=hotkey,
-                    context="BaseValidator.serve_axon"
-                )
-                pass
-
-        except Exception as e:
-            error_msg = f"Failed to create Axon initialize with exception: {e}"
-            logger.error(error_msg)
-            hotkey = self.wallet.hotkey.ss58_address if hasattr(self, 'wallet') and self.wallet else ""
-            send_error_safe(
-                error_message=error_msg,
-                hotkey=hotkey,
-                context="BaseValidator.serve_axon"
-            )
-            pass
 
     async def concurrent_forward(self):
         coroutines = [
@@ -199,8 +149,6 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
-            if self.axon:
-                self.axon.stop()
             logger.warning("Validator killed by keyboard interrupt.")
             exit()
 
@@ -292,57 +240,34 @@ class BaseValidatorNeuron(BaseNeuron):
                 f"Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
 
-        # Calculate the average reward for each uid across non-zero values.
-        # Replace any NaN values with 0.
-        # Compute the norm of the scores
-        norm = np.linalg.norm(self.scores, ord=1, axis=0, keepdims=True)
+        # Build relative float weights for bt.SetWeights (clips/normalizes/u16 internally).
+        scores = np.nan_to_num(self.scores, nan=0.0)
+        weights = {
+            int(uid): float(score)
+            for uid, score in enumerate(scores)
+            if score > 0
+        }
+        if not weights:
+            logger.warning("No non-zero scores to set as weights; skipping set_weights")
+            return
 
-        # Check if the norm is zero or contains NaN values
-        if np.any(norm == 0) or np.isnan(norm).any():
-            norm = np.ones_like(norm)  # Avoid division by zero or NaN
-
-        # Compute raw_weights safely
-        raw_weights = self.scores / norm
-
-        logger.debug("raw_weights", raw_weights)
-        logger.debug("raw_weight_uids", str(self.metagraph.uids.tolist()))
-        # Process the raw weights to final_weights via subtensor limitations.
-        (
-            processed_weight_uids,
-            processed_weights,
-        ) = process_weights_for_netuid(
-            uids=self.metagraph.uids,
-            weights=raw_weights,
-            netuid=self.config.netuid,
-            subtensor=self.subtensor,
-            metagraph=self.metagraph,
-        )
-        # logger.debug(f"processed_weights {processed_weights}")
-        # logger.debug(f"processed_weight_uids {processed_weight_uids}")
-
-        # Convert to uint16 weights and uids.
-        (
-            uint_uids,
-            uint_weights,
-        ) = convert_weights_and_uids_for_emit(
-            uids=processed_weight_uids, weights=processed_weights
-        )
-        logger.info(f"uint_weights: {uint_weights}")
-        logger.info(f"uint_uids: {uint_uids}")
+        logger.info(f"Setting weights for {len(weights)} uids: {weights}")
 
         # Set the weights on chain via our subtensor connection.
-        result, msg = self.subtensor.set_weights(
-            wallet=self.wallet,
-            netuid=self.config.netuid,
-            uids=uint_uids,
-            weights=uint_weights,
+        result = self.subtensor.execute(
+            bt.SetWeights(
+                netuid=self.config.netuid,
+                weights=weights,
+                version_key=self.spec_version,
+            ),
+            self.wallet,
             wait_for_finalization=True,
             wait_for_inclusion=True,
-            version_key=self.spec_version,
         )
-        if result is True:
-            logger.info(f"set_weights on chain successfully! {msg}")
+        if result.success:
+            logger.info("set_weights on chain successfully!")
         else:
+            msg = getattr(result.error, "message", None) or str(result.error)
             if "Perhaps it is too" not in msg:
                 logger.error(f"set_weights failed: {msg}")
 
@@ -351,29 +276,36 @@ class BaseValidatorNeuron(BaseNeuron):
         logger.info("run resync_metagraph")
 
         # Copies state of metagraph before syncing.
-        previous_metagraph = copy.deepcopy(self.metagraph)
+        previous_hotkeys = copy.deepcopy(self.hotkeys)
+        previous_axons = [n.axon for n in self.metagraph.neurons]
 
         # Sync the metagraph.
-        self.metagraph.sync(subtensor=self.subtensor)
+        self.metagraph = self.subtensor.subnets.metagraph(self.config.netuid)
+        if self.metagraph is None:
+            logger.error(
+                f"Failed to refetch metagraph for netuid {self.config.netuid}"
+            )
+            return
 
         # Check if the metagraph axon info has changed.
-        if previous_metagraph.axons == self.metagraph.axons:
+        if previous_axons == [n.axon for n in self.metagraph.neurons]:
             return
 
         logger.info(
             "Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages"
         )
         # Zero out all hotkeys that have been replaced.
-        for uid, hotkey in enumerate(self.hotkeys):
-            if hotkey != self.metagraph.hotkeys[uid]:
-                self.scores[uid] = 0  # hotkey has been replaced
+        for uid, hotkey in enumerate(previous_hotkeys):
+            if uid < len(self.metagraph.hotkeys) and hotkey != self.metagraph.hotkeys[uid]:
+                if uid < len(self.scores):
+                    self.scores[uid] = 0  # hotkey has been replaced
 
         # Check to see if the metagraph has changed size.
         # If so, we need to add new hotkeys and moving averages.
-        if len(self.hotkeys) < len(self.metagraph.hotkeys):
+        if len(previous_hotkeys) < len(self.metagraph.hotkeys):
             # Update the size of the moving average scores.
-            new_moving_average = np.zeros((self.metagraph.n))
-            min_len = min(len(self.hotkeys), len(self.scores))
+            new_moving_average = np.zeros(len(self.metagraph))
+            min_len = min(len(previous_hotkeys), len(self.scores))
             new_moving_average[:min_len] = self.scores[:min_len]
             self.scores = new_moving_average
 
