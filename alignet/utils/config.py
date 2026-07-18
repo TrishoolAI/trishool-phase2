@@ -19,9 +19,14 @@
 import os
 import subprocess
 import argparse
-import bittensor as bt
+from types import SimpleNamespace
 from alignet.utils.logging import get_logger
+
 logger = get_logger()
+
+DEFAULT_WALLET_PATH = os.path.expanduser("~/.bittensor/wallets")
+DEFAULT_LOGGING_DIR = os.path.expanduser("~/.bittensor/neurons")
+
 
 def is_cuda_available():
     try:
@@ -41,13 +46,47 @@ def is_cuda_available():
     return "cpu"
 
 
-def check_config(cls, config: "bt.Config"):
-    r"""Checks/validates the config namespace object."""
-    bt.logging.check_config(config)
+class Config(SimpleNamespace):
+    """Nested config object with merge support (replaces bt.Config)."""
 
+    def merge(self, other: "Config | None") -> "Config":
+        if other is None:
+            return self
+        for key, value in vars(other).items():
+            if key.startswith("_"):
+                continue
+            existing = getattr(self, key, None)
+            if isinstance(existing, SimpleNamespace) and isinstance(
+                value, SimpleNamespace
+            ):
+                existing.merge(value) if hasattr(existing, "merge") else _merge_ns(
+                    existing, value
+                )
+            else:
+                setattr(self, key, value)
+        return self
+
+
+def _merge_ns(dst: SimpleNamespace, src: SimpleNamespace) -> None:
+    for key, value in vars(src).items():
+        if key.startswith("_"):
+            continue
+        existing = getattr(dst, key, None)
+        if isinstance(existing, SimpleNamespace) and isinstance(value, SimpleNamespace):
+            _merge_ns(existing, value)
+        else:
+            setattr(dst, key, value)
+
+
+def _ns(**kwargs) -> Config:
+    return Config(**kwargs)
+
+
+def check_config(cls, config: Config):
+    """Checks/validates the config namespace object and creates neuron paths."""
     full_path = os.path.expanduser(
         "{}/{}/{}/netuid{}/{}".format(
-            config.logging.logging_dir,  # TODO: change from ~/.bittensor/miners to ~/.bittensor/neurons
+            config.logging.logging_dir,
             config.wallet.name,
             config.wallet.hotkey,
             config.netuid,
@@ -60,11 +99,42 @@ def check_config(cls, config: "bt.Config"):
 
 
 def add_args(cls, parser):
-    """
-    Adds relevant arguments to the parser for operation.
-    """
+    """Adds relevant arguments to the parser for operation."""
 
     parser.add_argument("--netuid", type=int, help="Subnet netuid", default=1)
+
+    parser.add_argument(
+        "--network",
+        "-n",
+        type=str,
+        help="Network name (finney/test/local) or a ws:// endpoint.",
+        default=os.environ.get("BT_NETWORK", "finney"),
+    )
+
+    parser.add_argument(
+        "--wallet",
+        "-w",
+        dest="wallet_name",
+        type=str,
+        help="Coldkey wallet name.",
+        default=os.environ.get("BT_WALLET", "default"),
+    )
+
+    parser.add_argument(
+        "--wallet-hotkey",
+        "-H",
+        dest="wallet_hotkey",
+        type=str,
+        help="Hotkey name within the wallet.",
+        default=os.environ.get("BT_WALLET_HOTKEY", "default"),
+    )
+
+    parser.add_argument(
+        "--wallet-path",
+        type=str,
+        help="Wallet directory.",
+        default=os.environ.get("BT_WALLET_PATH", DEFAULT_WALLET_PATH),
+    )
 
     parser.add_argument(
         "--neuron.device",
@@ -76,7 +146,7 @@ def add_args(cls, parser):
     parser.add_argument(
         "--neuron.epoch_length",
         type=int,
-        help="The default epoch length (how often we set weights, measured in 12 second blocks).",
+        help="The default epoch length (how often we set weights, measured in blocks).",
         default=100,
     )
 
@@ -114,6 +184,7 @@ def add_args(cls, parser):
         help="Notes to add to the wandb run.",
         default="",
     )
+
 
 def add_miner_args(cls, parser):
     """Add miner specific arguments to the parser."""
@@ -203,10 +274,8 @@ def add_validator_args(cls, parser):
         "--neuron.axon_off",
         "--axon_off",
         action="store_true",
-        # Note: the validator needs to serve an Axon with their IP or they may
-        #   be blacklisted by the firewall of serving peers on the network.
-        help="Set this flag to not attempt to serve an Axon.",
-        default=False,
+        help="Unused in v11 (axon/dendrite removed). Kept for CLI compatibility.",
+        default=True,
     )
 
     parser.add_argument(
@@ -231,14 +300,64 @@ def add_validator_args(cls, parser):
     )
 
 
-def config(cls):
+def _getattr_dotted(ns: argparse.Namespace, key: str, default=None):
+    """Read argparse values that used dotted option names (dest keeps the dots)."""
+    return getattr(ns, key, default)
+
+
+def namespace_to_config(args: argparse.Namespace) -> Config:
+    """Convert flat argparse Namespace into nested Config used by neurons."""
+    return _ns(
+        netuid=args.netuid,
+        network=args.network,
+        wallet=_ns(
+            name=args.wallet_name,
+            hotkey=args.wallet_hotkey,
+            path=os.path.expanduser(args.wallet_path),
+        ),
+        logging=_ns(
+            logging_dir=DEFAULT_LOGGING_DIR,
+        ),
+        neuron=_ns(
+            device=_getattr_dotted(args, "neuron.device", is_cuda_available()),
+            epoch_length=_getattr_dotted(args, "neuron.epoch_length", 100),
+            events_retention_size=_getattr_dotted(
+                args, "neuron.events_retention_size", 2 * 1024 * 1024 * 1024
+            ),
+            dont_save_events=_getattr_dotted(args, "neuron.dont_save_events", False),
+            name=_getattr_dotted(args, "neuron.name", "validator"),
+            timeout=_getattr_dotted(args, "neuron.timeout", 10),
+            num_concurrent_forwards=_getattr_dotted(
+                args, "neuron.num_concurrent_forwards", 1
+            ),
+            sample_size=_getattr_dotted(args, "neuron.sample_size", 50),
+            disable_set_weights=_getattr_dotted(
+                args, "neuron.disable_set_weights", False
+            ),
+            moving_average_alpha=_getattr_dotted(
+                args, "neuron.moving_average_alpha", 0.1
+            ),
+            axon_off=_getattr_dotted(args, "neuron.axon_off", True),
+            vpermit_tao_limit=_getattr_dotted(args, "neuron.vpermit_tao_limit", 4096),
+            full_path=None,
+        ),
+        wandb=_ns(
+            off=_getattr_dotted(args, "wandb.off", False),
+            offline=_getattr_dotted(args, "wandb.offline", False),
+            notes=_getattr_dotted(args, "wandb.notes", ""),
+            project_name=_getattr_dotted(args, "wandb.project_name", "template-validators"),
+            entity=_getattr_dotted(args, "wandb.entity", "opentensor-dev"),
+        ),
+        # Compatibility alias used by older call sites
+        subtensor=_ns(network=args.network),
+    )
+
+
+def config(cls) -> Config:
     """
     Returns the configuration object specific to this miner or validator after adding relevant arguments.
     """
     parser = argparse.ArgumentParser()
-    bt.wallet.add_args(parser)
-    bt.subtensor.add_args(parser)
-    bt.logging.add_args(parser)
-    bt.axon.add_args(parser)
     cls.add_args(parser)
-    return bt.config(parser)
+    args = parser.parse_args()
+    return namespace_to_config(args)
