@@ -19,9 +19,13 @@
 import os
 import subprocess
 import argparse
-import bittensor as bt
+from types import SimpleNamespace
 from alignet.utils.logging import get_logger
 logger = get_logger()
+
+DEFAULT_WALLET_PATH = os.path.expanduser("~/.bittensor/wallets")
+DEFAULT_LOGGING_DIR = os.path.expanduser("~/.bittensor/miners")
+
 
 def is_cuda_available():
     try:
@@ -41,9 +45,29 @@ def is_cuda_available():
     return "cpu"
 
 
-def check_config(cls, config: "bt.Config"):
+class Config(SimpleNamespace):
+    """Nested config object with merge support (replaces bt.Config)."""
+
+    def merge(self, other):
+        if other is None:
+            return self
+        for key, value in vars(other).items():
+            if key.startswith("_"):
+                continue
+            existing = getattr(self, key, None)
+            if isinstance(existing, SimpleNamespace) and isinstance(value, SimpleNamespace):
+                if hasattr(existing, "merge"):
+                    existing.merge(value)
+                else:
+                    for k, v in vars(value).items():
+                        setattr(existing, k, v)
+            else:
+                setattr(self, key, value)
+        return self
+
+
+def check_config(cls, config: "Config"):
     r"""Checks/validates the config namespace object."""
-    bt.logging.check_config(config)
 
     full_path = os.path.expanduser(
         "{}/{}/{}/netuid{}/{}".format(
@@ -65,6 +89,39 @@ def add_args(cls, parser):
     """
 
     parser.add_argument("--netuid", type=int, help="Subnet netuid", default=1)
+
+    parser.add_argument(
+        "--network",
+        "-n",
+        type=str,
+        help="Network name (finney/test/local) or a ws:// endpoint.",
+        default=os.environ.get("BT_NETWORK", "finney"),
+    )
+
+    parser.add_argument(
+        "--wallet",
+        "-w",
+        dest="wallet_name",
+        type=str,
+        help="Coldkey wallet name.",
+        default=os.environ.get("BT_WALLET", "default"),
+    )
+
+    parser.add_argument(
+        "--wallet-hotkey",
+        "-H",
+        dest="wallet_hotkey",
+        type=str,
+        help="Hotkey name within the wallet.",
+        default=os.environ.get("BT_WALLET_HOTKEY", "default"),
+    )
+
+    parser.add_argument(
+        "--wallet-path",
+        type=str,
+        help="Wallet directory.",
+        default=os.environ.get("BT_WALLET_PATH", DEFAULT_WALLET_PATH),
+    )
 
     parser.add_argument(
         "--neuron.device",
@@ -231,14 +288,55 @@ def add_validator_args(cls, parser):
     )
 
 
+def _g(args, key, default=None):
+    return getattr(args, key, default)
+
+
+def namespace_to_config(args: argparse.Namespace) -> Config:
+    """Convert flat argparse Namespace into nested Config used by neurons."""
+    return Config(
+        netuid=args.netuid,
+        network=args.network,
+        wallet=Config(
+            name=args.wallet_name,
+            hotkey=args.wallet_hotkey,
+            path=os.path.expanduser(args.wallet_path),
+        ),
+        logging=Config(
+            logging_dir=DEFAULT_LOGGING_DIR,
+        ),
+        neuron=Config(
+            device=_g(args, "neuron.device", is_cuda_available()),
+            epoch_length=_g(args, "neuron.epoch_length", 100),
+            events_retention_size=_g(
+                args, "neuron.events_retention_size", 2 * 1024 * 1024 * 1024
+            ),
+            dont_save_events=_g(args, "neuron.dont_save_events", False),
+            name=_g(args, "neuron.name", "validator"),
+            timeout=_g(args, "neuron.timeout", 10),
+            num_concurrent_forwards=_g(args, "neuron.num_concurrent_forwards", 1),
+            sample_size=_g(args, "neuron.sample_size", 50),
+            disable_set_weights=_g(args, "neuron.disable_set_weights", False),
+            moving_average_alpha=_g(args, "neuron.moving_average_alpha", 0.1),
+            axon_off=_g(args, "neuron.axon_off", False),
+            vpermit_tao_limit=_g(args, "neuron.vpermit_tao_limit", 4096),
+            full_path=None,
+        ),
+        wandb=Config(
+            off=_g(args, "wandb.off", False),
+            offline=_g(args, "wandb.offline", False),
+            notes=_g(args, "wandb.notes", ""),
+            project_name=_g(args, "wandb.project_name", "template-validators"),
+            entity=_g(args, "wandb.entity", "opentensor-dev"),
+        ),
+    )
+
+
 def config(cls):
     """
     Returns the configuration object specific to this miner or validator after adding relevant arguments.
     """
     parser = argparse.ArgumentParser()
-    bt.wallet.add_args(parser)
-    bt.subtensor.add_args(parser)
-    bt.logging.add_args(parser)
-    bt.axon.add_args(parser)
     cls.add_args(parser)
-    return bt.config(parser)
+    args = parser.parse_args()
+    return namespace_to_config(args)

@@ -19,6 +19,7 @@ import copy
 import typing
 import logging
 import bittensor as bt
+from bittensor.wallet import Wallet
 
 from abc import ABC, abstractmethod
 
@@ -70,14 +71,15 @@ class BaseNeuron(ABC):
         # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
         self.device = self.config.neuron.device
 
-        # Log the configuration for reference.
-        bt.logging.set_config(config=self.config.logging)
-
         # Build Bittensor objects
         # These are core Bittensor classes to interact with the network.
-        self.wallet = bt.wallet(config=self.config)
-        self.subtensor = bt.subtensor(config=self.config)
-        self.metagraph = self.subtensor.metagraph(self.config.netuid)
+        self.wallet = Wallet(
+            name=self.config.wallet.name,
+            hotkey=self.config.wallet.hotkey,
+            path=self.config.wallet.path,
+        )
+        self.subtensor = bt.Subtensor(self.config.network)
+        self.metagraph = self.subtensor.subnets.metagraph(self.config.netuid)
         logger.info(f"Wallet: {self.wallet}")
         logger.info(f"Subtensor: {self.subtensor}")
         logger.info(f"Metagraph: {self.metagraph}")
@@ -90,12 +92,12 @@ class BaseNeuron(ABC):
             self.wallet.hotkey.ss58_address
         )
         logger.info(
-            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
+            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.endpoint}"
         )
         self.step = 0
 
     @abstractmethod
-    async def forward(self, synapse: bt.Synapse) -> bt.Synapse:
+    async def forward(self):
         ...
 
     @abstractmethod
@@ -132,10 +134,10 @@ class BaseNeuron(ABC):
     def check_registered(self):
         hotkey = self.wallet.hotkey.ss58_address if hasattr(self, 'wallet') and self.wallet else ""
         # --- Check for registration.
-        if not self.subtensor.is_hotkey_registered(
-            netuid=self.config.netuid,
+        if self.subtensor.neurons.uid(
             hotkey_ss58=self.wallet.hotkey.ss58_address,
-        ):
+            netuid=self.config.netuid,
+        ) is None:
             error_msg = (
                 f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
                 f" Please register the hotkey using `btcli subnets register` before trying again"
@@ -154,7 +156,7 @@ class BaseNeuron(ABC):
         Check if enough epoch blocks have elapsed since the last checkpoint to sync.
         """
         return (
-            self.block - self.metagraph.last_update[self.uid]
+            self.block - self.metagraph.neuron(self.uid).last_update
         ) > self.config.neuron.epoch_length
 
     def should_set_weights(self) -> bool:
@@ -168,7 +170,7 @@ class BaseNeuron(ABC):
 
         # Define appropriate logic for when set weights.
         return (
-            (self.block - self.metagraph.last_update[self.uid])
+            (self.block - self.metagraph.neuron(self.uid).last_update)
             > self.config.neuron.epoch_length
             and self.neuron_type != "MinerNeuron"
         )  # don't set weights if you're a miner
