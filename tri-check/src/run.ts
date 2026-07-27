@@ -8,11 +8,17 @@ import {
   type ResolvedServiceUrls,
 } from "./env.js";
 import { mergedRubricForQuestion } from "./groundTruth.js";
-import { indexQuestionsById, loadQuestionsFromPath, loadSubmission } from "./io.js";
+import { indexQuestionsById, loadQuestionsFromPath, loadSubmission, questionKey } from "./io.js";
+import {
+  extractTemplate,
+  isTemplateSubmission,
+  validateTemplate,
+} from "./template.js";
 import type {
   CliOutputReport,
   PerQuestionResult,
   QuestionMeta,
+  QuestionsSubmissionFile,
   SubmissionEntry,
 } from "./types.js";
 
@@ -272,11 +278,39 @@ export async function runFromSubmission(args: {
   const submission = loadSubmission(args.submissionPath);
   const questions = loadQuestionsFromPath(args.questionsPath);
   const byId = indexQuestionsById(questions);
-  const ids = sortQuestionIds(Object.keys(submission));
   const results: PerQuestionResult[] = [];
 
+  // Universal template: one {"prompt": "... {{objective}} ..."}. Drive ids from
+  // the rubric (not the submission), expand locally so miners can test before upload.
+  if (isTemplateSubmission(submission)) {
+    const template = extractTemplate(submission);
+    validateTemplate(template);
+    const ids = sortQuestionIds(questions.map((q) => questionKey(q)));
+    for (const id of ids) {
+      const meta = mergedRubricForQuestion(id, byId, args.options.groundTruthById);
+      // Single non-global replace — validateTemplate already requires exactly one slot.
+      const prompt = template.replace(/\{\{\s*objective\s*\}\}/i, () => meta.objective);
+      // TEMPLATE has no per-question `url` / technique / MCP — CLI --openclaw-url only.
+      const r = await evaluateOne({
+        id,
+        prompt,
+        openclawBase: args.options.openclawUrl,
+        judgeBase: args.options.judgeUrl,
+        urls: args.options.urls,
+        meta,
+        verbose: args.options.verbose,
+        fixtureRedact: args.options.fixtureRedact ?? [],
+        localGuard: args.options.localGuard,
+      });
+      results.push(r);
+    }
+    return summarizeReport(results);
+  }
+
+  const questionsSubmission = submission as QuestionsSubmissionFile;
+  const ids = sortQuestionIds(Object.keys(questionsSubmission));
   for (const id of ids) {
-    const entry = submission[id];
+    const entry = questionsSubmission[id];
     if (!entry || typeof entry !== "object") {
       results.push({
         id,
@@ -292,6 +326,7 @@ export async function runFromSubmission(args: {
       continue;
     }
     const prompt = typeof entry.prompt === "string" ? entry.prompt : "";
+    // Per-question OpenClaw URL override — QUESTIONS format only (ignored under TEMPLATE above).
     const perUrl = entry.url !== undefined && String(entry.url).trim() !== "" ? String(entry.url).replace(/\/$/, "") : undefined;
     const openclawBase = perUrl ?? args.options.openclawUrl;
     const meta = mergedRubricForQuestion(id, byId, args.options.groundTruthById);
