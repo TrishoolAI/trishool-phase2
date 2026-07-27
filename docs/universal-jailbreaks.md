@@ -44,7 +44,30 @@ What it proves: the *same text* works across the challenge's objectives. What it
 
 ## Evidence miners already do this
 
-`tri-check/data/example-submission.json` has twelve **byte-identical** prompts — already a universal jailbreak submitted through the old shape. The format change makes that pattern legible and rejects placeholder-free bodies so scoring stays measurable. The common-prefix study (human measurement) turns this anecdote into a distribution; that distribution is still a stated gap until measurements run.
+`tri-check/data/example-submission.json` has twelve **byte-identical** prompts — already a universal jailbreak submitted through the old shape. The format change makes that pattern legible and rejects placeholder-free bodies so scoring stays measurable.
+
+**Common-prefix study (prod `miner_submissions`, n=1351, 2026-07-27):**
+
+| Bucket | Count |
+|---|---|
+| 0.00–0.25 (mostly distinct per question) | 1267 |
+| 0.25–0.50 | 18 |
+| 0.50–0.75 | 15 |
+| 0.75–0.95 (strong scaffold) | 34 |
+| 0.95–1.00 (near-universal) | 17 |
+
+- Coverage median **0.0005**, mean **0.055**. Fully identical prompts: **12 / 1351 (0.89%)**.
+- So universal scaffolds exist in the wild, but they are a **small minority** — most historical submissions are still per-question distinct text. The reference example is real, not typical.
+
+**Cosine (text-embedding-3-small), high-coverage template proxies (n=30):**
+
+| Distribution | n | p10 | median | p90 |
+|---|---|---|---|---|
+| template↔template | 435 | 0.20 | 0.30 | 0.80 |
+| template↔legacy same-id | 30 | 0.73 | 0.95 | 1.00 |
+| template↔legacy all pairs | 900 | 0.21 | 0.31 | 0.81 |
+
+Heuristic suggestion from same-technique cross p10: **`SIMILARITY_CHECK_THRESHOLD_TEMPLATE ≈ 0.71`** (placeholder default was 0.85). Stratified samples that include low-coverage (non-template) rows depress same-id cross-format cosine — treat those as a warning that per-`kind` thresholds may still be needed if low-quality proxies enter the corpus. Final threshold flip remains a rollout decision.
 
 ## Local testing
 
