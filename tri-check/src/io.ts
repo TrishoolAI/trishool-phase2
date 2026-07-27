@@ -42,7 +42,9 @@ export function indexQuestionsById(questions: QuestionMeta[]): Map<string, Quest
 export function loadSubmission(path: string): SubmissionFile {
   const data = readJsonFile<unknown>(path);
   if (!data || typeof data !== "object" || Array.isArray(data)) {
-    throw new Error(`Invalid submission file: ${path} — expected a JSON object keyed by question id (e.g. Q1)`);
+    throw new Error(
+      `Invalid submission file: ${path} — expected a JSON object (Q1..Qn entries, or {"prompt": "... {{objective}} ..."})`,
+    );
   }
   return data as SubmissionFile;
 }

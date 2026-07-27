@@ -14,7 +14,7 @@ A Bittensor subnet building the SOTA AI guard model. Miners submit adversarial p
 ┌─────────────────────────────────────────────────────────────┐
 │  MINER                                                       │
 │  - alignet.cli.miner upload (Bittensor wallet signature)    │
-│  - submission_items: Q1–Qn per surface_area schema          │
+│  - submission_items: {"prompt": "... {{objective}} ..."} (TEMPLATE) or Q1–Qn (QUESTIONS)          │
 └──────────────────────┬──────────────────────────────────────┘
                        │ POST /api/v1/miner/upload
                        ▼
@@ -308,15 +308,16 @@ python -m alignet.cli.miner upload \
   --api-url https://api.trishool.ai
 ```
 
-**Submission file format** (keys Q1–Qn must match the active challenge's `question_count`):
+**Submission file format** (Surface Area 1). Challenge `submission_format` selects which shape is accepted:
 
-| Surface Area | Format |
+| Format | Body |
 |---|---|
-| 1 | `{"Q1": "prompt", "Q2": "prompt", ...}` |
-| 2 | `{"Q1": {"prompt": "...", "url": "..."}, ...}` |
-| 3 | `{"Q1": {"prompt": "...", "endpoint": "..."}, ...}` |
-| 4 | `{"Q1": {"conversation": [...]}, ...}` |
-| 5 | `{"Q1": {"session1": [...], "session2": [...]}, ...}` |
+| `TEMPLATE` (default for new challenges) | `{"prompt": "... {{objective}} ..."}` — exactly one `{{objective}}`; length ≤ 2000 including the placeholder |
+| `QUESTIONS` (legacy) | `{"Q1": {"prompt": "...", "technique"?: "...", "url"?: "...", "MCP"?: "..."}, ...}` |
+
+`technique` / `url` / `MCP` are supported under `QUESTIONS` only. See `docs/universal-jailbreaks.md`.
+
+Twin schema files (keep in sync): `tri-check/data/submission_schema.json` and `alignet/cli/submission_schema.json`.
 
 ---
 

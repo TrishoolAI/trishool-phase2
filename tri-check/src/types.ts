@@ -21,7 +21,15 @@ export interface SubmissionEntry {
   mcp?: string;
 }
 
-export type SubmissionFile = Record<string, SubmissionEntry>;
+/** Legacy per-question submission (QUESTIONS format). */
+export type QuestionsSubmissionFile = Record<string, SubmissionEntry>;
+
+/** Universal template submission (TEMPLATE format). */
+export type TemplateSubmissionFile = {
+  prompt: string;
+};
+
+export type SubmissionFile = QuestionsSubmissionFile | TemplateSubmissionFile;
 
 export interface JudgeResult {
   judgeVerdict?: string;

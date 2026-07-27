@@ -20,6 +20,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -27,6 +28,13 @@ from typing import Any, Dict, List, Optional
 import requests
 import typer
 from requests.exceptions import RequestException
+
+from alignet.cli.prompt_template import (
+    TemplateValidationError,
+    extract_template,
+    is_template_submission,
+    validate_template,
+)
 
 
 class MinerCLI:
@@ -78,8 +86,36 @@ class MinerCLI:
         except Exception as e:
             raise ValueError(f"Error reading submission file: {e}")
 
+        if not isinstance(submission_items, dict):
+            raise ValueError("Submission items must be a JSON object")
+
         if len(submission_items.keys()) == 0:
             raise ValueError("Submission items must have at least 1 key (Q1)")
+
+        # Dispatch by file shape: single `prompt` → TEMPLATE; Q* keys → QUESTIONS.
+        # Same rules/strings as sn23-backend app/core/prompt_template.py and
+        # tri-check/src/template.ts — keep the three byte-identical.
+        if is_template_submission(submission_items):
+            try:
+                template = extract_template(submission_items)
+                validate_template(template)
+            except TemplateValidationError as e:
+                raise ValueError(str(e)) from e
+        elif any(re.fullmatch(r"[Qq]\d+", k) for k in submission_items.keys()):
+            # Legacy QUESTIONS format — backend still validates prompts on upload.
+            pass
+        elif "prompt" in submission_items:
+            # Has prompt plus unexpected keys (or other shape) — surface template errors.
+            try:
+                template = extract_template(submission_items)
+                validate_template(template)
+            except TemplateValidationError as e:
+                raise ValueError(str(e)) from e
+        else:
+            raise ValueError(
+                'Submission must be either {"prompt": "... {{objective}} ..."} '
+                "or a Q1..Qn object"
+            )
 
         return submission_items
 
@@ -153,12 +189,13 @@ Examples:
   # Upload to custom API URL (Surface Area 2)
   python -m alignet.cli.miner upload --submission-file ./submission.json --surface-area 2 --hotkey YOUR_HOTKEY --coldkey YOUR_COLDKEY --network finney --netuid 23 --api-url https://api.example.com
 
-Submission file format depends on Surface Area:
-  Surface Area 1: {"Q1": "prompt", "Q2": "prompt", ...}
-  Surface Area 2: {"Q1": {"prompt": "...", "url": "..."}, ...}
-  Surface Area 3: {"Q1": {"prompt": "...", "endpoint": "..."}, ...}
-  Surface Area 4: {"Q1": {"conversation": [...]}, ...}
-  Surface Area 5: {"Q1": {"session1": [...], "session2": [...]}, ...}
+Submission file format (Surface Area 1):
+  TEMPLATE (default for new challenges):
+    {"prompt": "... {{objective}} ..."}
+  QUESTIONS (legacy challenges):
+    {"Q1": {"prompt": "...", "technique": "...", "url": "...", "MCP": "..."}, ...}
+  technique / url / MCP are supported under QUESTIONS only, not under TEMPLATE.
+  See docs/universal-jailbreaks.md
         """,
     )
 
@@ -173,7 +210,7 @@ Submission file format depends on Surface Area:
         "--submission-file",
         type=str,
         required=True,
-        help="Path to the submission JSON file (.json) with Q1-Qn format",
+        help='Path to submission JSON: {"prompt":"... {{objective}} ..."} or Q1..Qn',
     )
 
     upload_parser.add_argument(
