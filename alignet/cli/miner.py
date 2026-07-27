@@ -131,7 +131,7 @@ class MinerCLI:
         """
         Upload submission JSON file to the platform
         """
-        from bts_signature import build_pair_auth_payload
+        from alignet.cli.bts_signature import build_pair_auth_payload
 
         # Validate submission file and get submission items dict
         submission_items = self.validate_submission_file(submission_file)
