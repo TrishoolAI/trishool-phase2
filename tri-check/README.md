@@ -39,9 +39,15 @@ Ensure OpenClaw and Judge are reachable at those URLs (e.g. Docker stack from th
 
 ### 1) Submission JSON (batch)
 
-Use an alignet-style file like [`../alignet/cli/sample_submission.json`](../alignet/cli/sample_submission.json). Only **`prompt`** is required per question; **`technique`**, **`url`**, **`MCP`** are optional metadata.
+**TEMPLATE** (preferred for new challenges): a single scaffold with one `{{objective}}` slot. Example: [`data/new-format.json`](./data/new-format.json). `tri-check` expands it against the rubric so each question gets its own objective text — same expansion the backend performs on upload.
 
-- If a row has a non-empty **`url`**, it is used as the **OpenClaw base URL** for that question only; otherwise `OPENCLAW_URL` / `--openclaw-url` is used.
+```json
+{ "prompt": "... {{objective}} ..." }
+```
+
+**QUESTIONS** (legacy): alignet-style file like [`data/example-submission.json`](./data/example-submission.json). Only **`prompt`** is required per question; **`technique`**, **`url`**, **`MCP`** are optional metadata (not allowed under TEMPLATE).
+
+- If a QUESTIONS row has a non-empty **`url`**, it is used as the **OpenClaw base URL** for that question only; otherwise `OPENCLAW_URL` / `--openclaw-url` is used. Under TEMPLATE there is no per-question URL override.
 
 By default, rubric metadata is read from **[`data/questions.json`](./data/questions.json)** inside this package (JSON **array** of objects with **`question_id`** (e.g. `"Q1"`), or `{ "questions": [...] }`). Repo [`../eval/questions.json`](../eval/questions.json) uses legacy **`id`**; that still works. Override with **`--questions <path>`** when needed.
 
@@ -52,6 +58,7 @@ For objective-aligned batch prompts (each **`prompt`** = rubric **`objective`**)
 **PII-only Q7–Q12:** planted strings are synthetic PII under `workspace/eval/pii/` and are exposed to the model **only** through the **`pii_*`** plugin tools in lean OpenClaw (not the `read` tool). Document shapes: [`../tri-claw/docker/eval-pii-schema/`](../tri-claw/docker/eval-pii-schema/). Operators may set **`TRISHOOL_PII_DOCS_DIR`** when running lean **`docker-setup.sh`** to overlay that tree from a private bundle; **`ground-truth.json` must then match** the overlaid values.
 
 ```bash
+pnpm eval --submission data/new-format.json
 pnpm eval --submission data/example-submission.json
 ```
 
@@ -171,13 +178,25 @@ Then a short **run summary** (counts + jailbreaks). With `--out`, the same data 
 
 ## Submission schema (practical)
 
+### TEMPLATE (new challenges)
+
+```json
+{
+  "prompt": "required scaffold with exactly one {{objective}} (≤2000 chars including the placeholder)"
+}
+```
+
+`technique` / `url` / `MCP` are **not** allowed at the top level. See `docs/universal-jailbreaks.md`.
+
+### QUESTIONS (legacy)
+
 Top-level object with keys `Q1`, `Q2`, …:
 
 ```json
 {
   "Q1": {
     "prompt": "required for evaluation (non-empty)"
-  } ..
+  },
   "Q12": {
     "prompt": "required for evaluation (non-empty)"
   }
@@ -187,10 +206,10 @@ Top-level object with keys `Q1`, `Q2`, …:
 ```json
 {
   "Q1": {
-    "technique": "optional for future phases",
+    "technique": "optional metadata",
     "prompt": "required for evaluation (non-empty)",
-    "url": "optional per-question OpenClaw base URL for future phases",
-    "MCP": "optional for future phases"
+    "url": "optional per-question OpenClaw base URL",
+    "MCP": "optional metadata"
   }
 }
 ```
