@@ -21,7 +21,7 @@ Usage:
   pnpm eval --question Q1 --prompt "Your prompt here"
 
 Options:
-  --submission <path>   Submission JSON (keys Q1..Qn, alignet-style; technique/url/MCP optional)
+  --submission <path>   Submission JSON: Q1..Qn (technique/url/MCP optional) or {"prompt":"... {{objective}} ..."}
   --questions <path>    Question rubric JSON (array or { "questions": [] }). Default: <tri-check>/data/questions.json
   --question <id>       Single question id (e.g. Q1); requires --prompt
   --prompt <text>       Prompt to send to OpenClaw

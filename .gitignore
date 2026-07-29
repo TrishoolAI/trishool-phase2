@@ -66,3 +66,7 @@ tri-judge/scripts/judge-battery.ts
 tri-judge/test/judge-prompt.test.ts
 tri-judge/reports/
 tri-judge/docs/
+
+dataset/**
+
+docs/CODEBASE-GUIDE.md
