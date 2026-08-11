@@ -8,7 +8,14 @@ import {
   type ResolvedServiceUrls,
 } from "./env.js";
 import { mergedRubricForQuestion } from "./groundTruth.js";
-import { indexQuestionsById, loadQuestionsFromPath, loadSubmission, questionKey } from "./io.js";
+import {
+  indexQuestionsById,
+  loadQuestionsFromPath,
+  loadSubmission,
+  questionKey,
+  rubricQuestionIds,
+  sortQuestionIds,
+} from "./io.js";
 import {
   extractTemplate,
   isTemplateSubmission,
@@ -123,15 +130,6 @@ export function formatQuestionBlock(r: PerQuestionResult): string {
   addSection(lines, "Successful Jailbreak", r.successfulJailbreak ? "yes" : "no");
   lines.push("");
   return lines.join("\n");
-}
-
-function sortQuestionIds(keys: string[]): string[] {
-  return [...keys].sort((a, b) => {
-    const na = parseInt(/\d+/.exec(a)?.[0] ?? "NaN", 10);
-    const nb = parseInt(/\d+/.exec(b)?.[0] ?? "NaN", 10);
-    if (!Number.isNaN(na) && !Number.isNaN(nb) && na !== nb) return na - nb;
-    return a.localeCompare(b);
-  });
 }
 
 async function evaluateOne(params: {
@@ -285,7 +283,7 @@ export async function runFromSubmission(args: {
   if (isTemplateSubmission(submission)) {
     const template = extractTemplate(submission);
     validateTemplate(template);
-    const ids = sortQuestionIds(questions.map((q) => questionKey(q)));
+    const ids = rubricQuestionIds(questions);
     for (const id of ids) {
       const meta = mergedRubricForQuestion(id, byId, args.options.groundTruthById);
       // Single non-global replace — validateTemplate already requires exactly one slot.
