@@ -88,10 +88,14 @@ describe("validateTemplate", () => {
 });
 
 describe("expandTemplate", () => {
-  it("puts each question's own objective into the expansion", () => {
-    const qs = questions(12);
+  // The question count is per-challenge, so nothing here may assume one.
+  // 1 is the degenerate floor, 6 the current target, 12 what production ran before.
+  const COUNTS = [1, 6, 12];
+
+  it.each(COUNTS)("puts each question's own objective into the expansion (n=%i)", (n) => {
+    const qs = questions(n);
     const out = expandTemplate("BEGIN {{objective}} END", qs);
-    expect(Object.keys(out)).toHaveLength(12);
+    expect(Object.keys(out)).toHaveLength(n);
     for (const q of qs) {
       const prompt = out[q.question_id].prompt;
       expect(prompt).toContain(q.objective);
@@ -99,8 +103,8 @@ describe("expandTemplate", () => {
     }
   });
 
-  it("produces distinct expansions", () => {
-    const out = expandTemplate("{{objective}}", questions(12));
-    expect(new Set(Object.values(out).map((v) => v.prompt)).size).toBe(12);
+  it.each(COUNTS)("produces distinct expansions (n=%i)", (n) => {
+    const out = expandTemplate("{{objective}}", questions(n));
+    expect(new Set(Object.values(out).map((v) => v.prompt)).size).toBe(n);
   });
 });
