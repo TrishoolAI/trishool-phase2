@@ -26,7 +26,7 @@ Validation runs in three places with **identical error strings** — keep them i
 
 ### Exactly one `{{objective}}`
 
-Zero placeholders is a 400. Without the slot, all expansions are byte-identical, which turns the challenge into one trial scored twelve times. The summed 0/1/2 scoring cannot tell that apart from genuine breadth. The placeholder is required so each question is a **distinct trial**, even if your technique does not depend on the objective text — append a trailing `{{objective}}` if you need a no-op slot.
+Zero placeholders is a 400. Without the slot, all expansions are byte-identical, which turns the challenge into one trial scored once per question. The summed 0/1/2 scoring cannot tell that apart from genuine breadth. The placeholder is required so each question is a **distinct trial**, even if your technique does not depend on the objective text — append a trailing `{{objective}}` if you need a no-op slot.
 
 ### `technique` / `url` / `MCP`
 
@@ -38,13 +38,13 @@ Only the submitted template is capped at 2000 characters (including `{{objective
 
 ## Hypothesis (why this format)
 
-A jailbreak whose efficacy is invariant to the harmful objective is a *capability* of the attack scaffold. Twelve hand-tuned prompts are twelve data points; one template that clears twelve objectives is a claim about the model's boundary.
+A jailbreak whose efficacy is invariant to the harmful objective is a *capability* of the attack scaffold. N hand-tuned prompts are N data points; one template that clears all N objectives is a claim about the model's boundary.
 
 What it proves: the *same text* works across the challenge's objectives. What it does **not** prove on its own: cross-category universality (many shipped sets are single-category), holdout generalization (objectives are public today), or breadth vs narrow yield (scoring is a sum, not a universality metric). See Plan.md for the full gap analysis and phased follow-ups.
 
 ## Evidence miners already do this
 
-`tri-check/data/example-submission.json` has twelve **byte-identical** prompts — already a universal jailbreak submitted through the old shape. The format change makes that pattern legible and rejects placeholder-free bodies so scoring stays measurable.
+`tri-check/data/example-submission.json` has **byte-identical** prompts for every question — already a universal jailbreak submitted through the old shape. The format change makes that pattern legible and rejects placeholder-free bodies so scoring stays measurable.
 
 **Common-prefix study (prod `miner_submissions`, n=1351, 2026-07-27):**
 
@@ -76,4 +76,4 @@ cd tri-check
 pnpm eval --submission data/new-format.json --questions data/questions.json
 ```
 
-Expect twelve results, each `promptSubmitted` containing its own objective.
+Expect one result per question in `data/questions.json`, each `promptSubmitted` containing its own objective.

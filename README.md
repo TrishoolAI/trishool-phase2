@@ -264,7 +264,7 @@ Local OpenClaw → Judge smoke test for a miner submission (same expansion the b
 ```bash
 cd tri-check
 
-# TEMPLATE (preferred) — expands {{objective}} against data/questions.json → Q1..Q12
+# TEMPLATE (preferred) — expands {{objective}} against data/questions.json → one prompt per question
 pnpm eval --submission data/new-format.json
 
 # Or point at your own template / the CLI sample:

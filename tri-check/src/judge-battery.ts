@@ -10,7 +10,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_QUESTIONS_PATH, TRI_CHECK_ROOT, loadEnvFiles, resolveServiceUrls } from "./env.js";
 import { callJudge, isSuccessfulJailbreak } from "./clients/judge.js";
-import { indexQuestionsById, loadQuestionsFromPath, writeReportFile } from "./io.js";
+import {
+  indexQuestionsById,
+  loadQuestionsFromPath,
+  rubricQuestionIds,
+  writeReportFile,
+} from "./io.js";
 import type { JudgeResult, PerQuestionResult, RunSummary } from "./types.js";
 
 loadEnvFiles();
@@ -97,7 +102,16 @@ export async function runBattery(args: {
   let evaluated = 0;
   let totalJailbreaks = 0;
   let totalErrors = 0;
-  const questionIds = Object.keys(canned).sort();
+  // Drive ids from the rubric, not from the canned file. A battery fixture that
+  // still carries ids the rubric has dropped would otherwise be judged against
+  // empty expectedSafe/expectedUnsafe text and silently report nonsense.
+  const questionIds = rubricQuestionIds(questions, canned);
+  const orphaned = Object.keys(canned).filter((id) => !byId.has(id));
+  if (orphaned.length > 0) {
+    console.log(
+      `note: ${orphaned.length} canned response(s) have no rubric entry and were skipped: ${orphaned.join(", ")}`,
+    );
+  }
 
   for (const qid of questionIds) {
     const modelResponse = canned[qid];

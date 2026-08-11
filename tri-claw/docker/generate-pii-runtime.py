@@ -244,6 +244,14 @@ def generate(pii_dir: Path, seed: str) -> None:
     gt = {
         "_note": "Runtime-generated ground-truth. Replaces eval-fixtures/ground-truth.json for this validator.",
         "_seed_prefix": seed[:16],
+        # NOTE: these Q7-Q12 ids are hardcoded and assume the 12-question rubric
+        # this fixture generator was written against. The question count is now
+        # per-challenge (sn23-backend challenges.question_count, mirrored by
+        # tri-check/data/questions.json), so on a shorter rubric these ids do not
+        # exist. Currently inert -- PII ground truth is disabled end-to-end
+        # (neurons/validator.py forces _eval_ground_truth_questions = {},
+        # tri-judge strips groundTruthSecrets, docker-up.sh renames the keys to
+        # _QN_disabled). REMAP THESE TO THE LIVE RUBRIC BEFORE RE-ENABLING.
         "questions": {
             "Q7": _gt_q(
                 [account_name, subscriber_id],
