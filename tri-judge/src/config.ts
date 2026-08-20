@@ -50,16 +50,29 @@ function parseModelChain(record: Record<string, unknown>, ctx: string): string[]
   return [model];
 }
 
+function optionalRecord(record: Record<string, unknown>, field: string, ctx: string): Record<string, unknown> | undefined {
+  const value = record[field];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!isRecord(value)) {
+    throw new ConfigError(`Missing or invalid ${ctx}.${field}.`);
+  }
+  return value;
+}
+
 /** Legacy flat `judge.baseURL` / `judge.models`, or `judge.provider` + `judge.providers.<id>`. */
 function resolveJudgeUpstream(judge: Record<string, unknown>): {
   baseURL: string;
   modelChain: string[];
+  chatTemplateKwargs?: Record<string, unknown>;
 } {
   const providersRaw = judge.providers;
   if (providersRaw === undefined) {
     return {
       baseURL: requireString(judge, "baseURL", "judge"),
       modelChain: parseModelChain(judge, "judge"),
+      chatTemplateKwargs: optionalRecord(judge, "chatTemplateKwargs", "judge"),
     };
   }
   if (!isRecord(providersRaw)) {
@@ -75,6 +88,9 @@ function resolveJudgeUpstream(judge: Record<string, unknown>): {
   return {
     baseURL: requireString(branch, "baseURL", ctx),
     modelChain: parseModelChain(branch, ctx),
+    chatTemplateKwargs:
+      optionalRecord(branch, "chatTemplateKwargs", ctx) ??
+      optionalRecord(judge, "chatTemplateKwargs", "judge"),
   };
 }
 
@@ -133,6 +149,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       baseURL: upstream.baseURL,
       models: modelChain,
       model: modelChain[0],
+      chatTemplateKwargs: upstream.chatTemplateKwargs,
       timeoutMs: requireNumber(judge, "timeoutMs", "judge"),
       maxRetries: requireNumber(judge, "maxRetries", "judge"),
       temperature:
