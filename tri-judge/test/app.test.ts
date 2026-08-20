@@ -172,6 +172,62 @@ describe("createApp", () => {
     await upstream.close();
   });
 
+  it("passes configured chat_template_kwargs to Chutes-style judge models", async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+    const upstream = await startMockOpenAiServer((req, res) => {
+      let data = "";
+      req.on("data", (chunk: Buffer) => {
+        data += chunk.toString();
+      });
+      req.on("end", () => {
+        capturedBody = JSON.parse(data) as Record<string, unknown>;
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    prompt: "",
+                    deobfuscatedPrompt: "Restated intent",
+                    modelResponse: "",
+                    toolCalls: [],
+                    judgeReasoning: "The model returned a safe response.",
+                    judgeVerdict: "safe",
+                    score: 0,
+                  }),
+                },
+              },
+            ],
+          }),
+        );
+      });
+    });
+
+    const app = createApp({
+      ...config,
+      judge: {
+        ...config.judge,
+        baseURL: upstream.url,
+        chatTemplateKwargs: { enable_thinking: false },
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/judge/evaluate",
+      headers: { "x-chutes-api-key": "test-key" },
+      payload: buildRequestBody(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(capturedBody).not.toBeNull();
+    expect(capturedBody?.chat_template_kwargs).toEqual({ enable_thinking: false });
+
+    await app.close();
+    await upstream.close();
+  });
+
   it("evaluates a request using X-OpenRouter-Api-Key", async () => {
     const upstream = await startMockOpenAiServer((req, res) => {
       res.writeHead(200, { "content-type": "application/json" });
@@ -315,6 +371,174 @@ describe("createApp", () => {
     expect(typeof body.judgeReasoning).toBe("string");
     expect(String(body.judgeReasoning)).toMatch(/Malformed JSON in judge response/);
     expect(String(body.judgeReasoning)).toMatch(/JSON value:/);
+
+    await app.close();
+    await upstream.close();
+  });
+
+  it("repairs common JSON-ish judge assistant output", async () => {
+    const upstream = await startMockOpenAiServer((req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: [
+                  "Here is the judgment:",
+                  "{",
+                  "  prompt: '',",
+                  "  deobfuscatedPrompt: 'Restated intent',",
+                  "  modelResponse: '',",
+                  "  toolCalls: [],",
+                  "  judgeReasoning: 'The response refuses the unsafe request.',",
+                  "  judgeVerdict: 'safe',",
+                  "  score: 0,",
+                  "}",
+                ].join("\n"),
+              },
+            },
+          ],
+        }),
+      );
+    });
+
+    const app = createApp({
+      ...config,
+      judge: { ...config.judge, baseURL: upstream.url },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/judge/evaluate",
+      headers: { "x-chutes-api-key": "test-key" },
+      payload: buildRequestBody(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      prompt: "Original prompt",
+      deobfuscatedPrompt: "Restated intent",
+      modelResponse: "Model output",
+      toolCalls: [],
+      judgeReasoning: "The response refuses the unsafe request.",
+      judgeVerdict: "safe",
+      score: 0,
+    });
+
+    await app.close();
+    await upstream.close();
+  });
+
+  it("retries malformed judge assistant JSON before returning the safe fallback", async () => {
+    let calls = 0;
+    const upstream = await startMockOpenAiServer((req, res) => {
+      calls += 1;
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content:
+                  calls === 1
+                    ? "{not-json"
+                    : JSON.stringify({
+                        prompt: "",
+                        deobfuscatedPrompt: "Restated intent",
+                        modelResponse: "",
+                        toolCalls: [],
+                        judgeReasoning: "The second attempt returned valid JSON.",
+                        judgeVerdict: "partial",
+                        score: 1,
+                      }),
+              },
+            },
+          ],
+        }),
+      );
+    });
+
+    const app = createApp({
+      ...config,
+      judge: { ...config.judge, baseURL: upstream.url, maxRetries: 1 },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/judge/evaluate",
+      headers: { "x-chutes-api-key": "test-key" },
+      payload: buildRequestBody(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(calls).toBe(2);
+    expect(response.json()).toEqual({
+      prompt: "Original prompt",
+      deobfuscatedPrompt: "Restated intent",
+      modelResponse: "Model output",
+      toolCalls: [],
+      judgeReasoning: "The second attempt returned valid JSON.",
+      judgeVerdict: "partial",
+      score: 1,
+    });
+
+    await app.close();
+    await upstream.close();
+  });
+
+  it("retries parsed judge JSON with missing required fields", async () => {
+    let calls = 0;
+    const upstream = await startMockOpenAiServer((req, res) => {
+      calls += 1;
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content:
+                  calls === 1
+                    ? JSON.stringify({ prompt: "", modelResponse: "", toolCalls: [] })
+                    : JSON.stringify({
+                        prompt: "",
+                        deobfuscatedPrompt: "Restated intent",
+                        modelResponse: "",
+                        toolCalls: [],
+                        judgeReasoning: "The second attempt returned complete judge fields.",
+                        judgeVerdict: "safe",
+                        score: 0,
+                      }),
+              },
+            },
+          ],
+        }),
+      );
+    });
+
+    const app = createApp({
+      ...config,
+      judge: { ...config.judge, baseURL: upstream.url, maxRetries: 1 },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/judge/evaluate",
+      headers: { "x-chutes-api-key": "test-key" },
+      payload: buildRequestBody(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(calls).toBe(2);
+    expect(response.json()).toEqual({
+      prompt: "Original prompt",
+      deobfuscatedPrompt: "Restated intent",
+      modelResponse: "Model output",
+      toolCalls: [],
+      judgeReasoning: "The second attempt returned complete judge fields.",
+      judgeVerdict: "safe",
+      score: 0,
+    });
 
     await app.close();
     await upstream.close();
