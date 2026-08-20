@@ -1,6 +1,7 @@
 import { JudgeUpstreamError } from "./errors.js";
 import { buildJudgeInstructions } from "./judge-prompt.js";
 import {
+  isTrivialJudgeText,
   malformedJudgeResponse,
   validateJudgeResponse,
 } from "./judge-result.js";
@@ -106,8 +107,8 @@ function extractAssistantText(payload: OpenAiLikeResponse): string | null {
   return null;
 }
 
-/** Try to extract a JSON object from text that may be wrapped in markdown or have extra text. */
-function extractJsonObject(text: string): unknown {
+/** Extract a JSON-ish object from text that may be wrapped in markdown or have extra text. */
+function extractJsonObjectText(text: string): string {
   let trimmed = text.trim();
   const fenceMatch = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   if (fenceMatch) {
@@ -148,7 +149,319 @@ function extractJsonObject(text: string): unknown {
   if (end === -1) {
     throw new Error("Unbalanced braces");
   }
-  return JSON.parse(trimmed.slice(firstBrace, end + 1));
+  return trimmed.slice(firstBrace, end + 1);
+}
+
+function convertSingleQuotedStrings(input: string): string {
+  let out = "";
+  let inDouble = false;
+  let inSingle = false;
+  let escape = false;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const c = input[i];
+
+    if (escape) {
+      if (inSingle && c === "'") {
+        out += "'";
+      } else {
+        out += `\\${c}`;
+      }
+      escape = false;
+      continue;
+    }
+
+    if (c === "\\") {
+      escape = true;
+      continue;
+    }
+
+    if (inSingle) {
+      if (c === "'") {
+        out += '"';
+        inSingle = false;
+      } else if (c === '"') {
+        out += '\\"';
+      } else {
+        out += c;
+      }
+      continue;
+    }
+
+    if (inDouble) {
+      out += c;
+      if (c === '"') {
+        inDouble = false;
+      }
+      continue;
+    }
+
+    if (c === "'") {
+      out += '"';
+      inSingle = true;
+      continue;
+    }
+    if (c === '"') {
+      out += c;
+      inDouble = true;
+      continue;
+    }
+    out += c;
+  }
+
+  if (escape) {
+    out += "\\";
+  }
+  return out;
+}
+
+function replaceBareJsonishLiterals(input: string): string {
+  let out = "";
+  let inString = false;
+  let escape = false;
+
+  const isIdentifierChar = (value: string | undefined): boolean =>
+    value !== undefined && /[A-Za-z0-9_]/.test(value);
+
+  for (let i = 0; i < input.length; i += 1) {
+    const c = input[i];
+    if (escape) {
+      out += c;
+      escape = false;
+      continue;
+    }
+    if (c === "\\") {
+      out += c;
+      escape = true;
+      continue;
+    }
+    if (c === '"') {
+      out += c;
+      inString = !inString;
+      continue;
+    }
+    if (
+      !inString &&
+      input.startsWith("True", i) &&
+      !isIdentifierChar(input[i - 1]) &&
+      !isIdentifierChar(input[i + "True".length])
+    ) {
+      out += "true";
+      i += "True".length - 1;
+      continue;
+    }
+    if (
+      !inString &&
+      input.startsWith("False", i) &&
+      !isIdentifierChar(input[i - 1]) &&
+      !isIdentifierChar(input[i + "False".length])
+    ) {
+      out += "false";
+      i += "False".length - 1;
+      continue;
+    }
+    if (
+      !inString &&
+      input.startsWith("None", i) &&
+      !isIdentifierChar(input[i - 1]) &&
+      !isIdentifierChar(input[i + "None".length])
+    ) {
+      out += "null";
+      i += "None".length - 1;
+      continue;
+    }
+    out += c;
+  }
+
+  return out;
+}
+
+function quoteUnquotedKeysOutsideStrings(input: string): string {
+  let out = "";
+  let inString = false;
+  let escape = false;
+
+  const isKeyStart = (value: string | undefined): boolean =>
+    value !== undefined && /[A-Za-z_]/.test(value);
+  const isKeyChar = (value: string | undefined): boolean =>
+    value !== undefined && /[A-Za-z0-9_]/.test(value);
+
+  for (let i = 0; i < input.length;) {
+    const c = input[i];
+
+    if (escape) {
+      out += c;
+      escape = false;
+      i += 1;
+      continue;
+    }
+    if (c === "\\") {
+      out += c;
+      escape = true;
+      i += 1;
+      continue;
+    }
+    if (c === '"') {
+      out += c;
+      inString = !inString;
+      i += 1;
+      continue;
+    }
+
+    if (!inString && (c === "{" || c === ",")) {
+      out += c;
+      i += 1;
+
+      const wsStart = i;
+      while (/\s/.test(input[i] ?? "")) {
+        i += 1;
+      }
+      const whitespace = input.slice(wsStart, i);
+
+      if (!isKeyStart(input[i])) {
+        out += whitespace;
+        continue;
+      }
+
+      const keyStart = i;
+      i += 1;
+      while (isKeyChar(input[i])) {
+        i += 1;
+      }
+      const key = input.slice(keyStart, i);
+
+      const afterKeyStart = i;
+      while (/\s/.test(input[i] ?? "")) {
+        i += 1;
+      }
+      if (input[i] === ":") {
+        out += `${whitespace}"${key}"${input.slice(afterKeyStart, i)}:`;
+        i += 1;
+      } else {
+        out += whitespace + key + input.slice(afterKeyStart, i);
+      }
+      continue;
+    }
+
+    out += c;
+    i += 1;
+  }
+
+  return out;
+}
+
+function removeTrailingCommasOutsideStrings(input: string): string {
+  let out = "";
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const c = input[i];
+
+    if (escape) {
+      out += c;
+      escape = false;
+      continue;
+    }
+    if (c === "\\") {
+      out += c;
+      escape = true;
+      continue;
+    }
+    if (c === '"') {
+      out += c;
+      inString = !inString;
+      continue;
+    }
+    if (!inString && c === ",") {
+      let j = i + 1;
+      while (/\s/.test(input[j] ?? "")) {
+        j += 1;
+      }
+      if (input[j] === "}" || input[j] === "]") {
+        continue;
+      }
+    }
+    out += c;
+  }
+
+  return out;
+}
+
+function repairJsonishObjectText(input: string): string {
+  return removeTrailingCommasOutsideStrings(
+    quoteUnquotedKeysOutsideStrings(
+      replaceBareJsonishLiterals(convertSingleQuotedStrings(input)),
+    ),
+  );
+}
+
+function parseJudgeAssistantJson(assistantText: string): unknown {
+  try {
+    return JSON.parse(assistantText);
+  } catch {
+    // Continue below; many OpenAI-compatible models add prose/fences around the object.
+  }
+
+  let objectText: string;
+  try {
+    objectText = extractJsonObjectText(assistantText);
+    return JSON.parse(objectText);
+  } catch {
+    objectText = extractJsonObjectText(assistantText);
+  }
+
+  return JSON.parse(repairJsonishObjectText(objectText));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function pickString(record: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string") {
+      return value;
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+      return String(value);
+    }
+  }
+  return "";
+}
+
+function hasUsableJudgeFields(payload: unknown): boolean {
+  if (!isRecord(payload)) {
+    return false;
+  }
+
+  const verdict = pickString(payload, [
+    "judgeVerdict",
+    "judge_verdict",
+    "verdict",
+    "judgment",
+    "result",
+  ]).trim().toLowerCase();
+  const score = payload.score ?? payload.Score;
+  const hasVerdict =
+    verdict === "safe" ||
+    verdict === "partial" ||
+    verdict === "jailbreak" ||
+    verdict === "blocked" ||
+    verdict === "refusal" ||
+    verdict === "refused" ||
+    verdict === "unsafe" ||
+    verdict === "successful_jailbreak";
+  const hasScore = score === 0 || score === 1 || score === 2;
+  const reasoning = pickString(payload, [
+    "judgeReasoning",
+    "judge_reasoning",
+    "reasoning",
+    "explanation",
+  ]);
+
+  return (hasVerdict || hasScore) && !isTrivialJudgeText(reasoning);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -187,6 +500,7 @@ export class JudgeClient {
       ? this.config.judge.models
       : [this.config.judge.model];
     let lastError: Error | null = null;
+    let lastMalformedJudgeResponse: { raw: string; reason: string } | null = null;
 
     for (let modelIndex = 0; modelIndex < modelChain.length; modelIndex += 1) {
       const model = modelChain[modelIndex];
@@ -200,6 +514,9 @@ export class JudgeClient {
         temperature: this.config.judge.temperature ?? 0,
         max_tokens: this.config.judge.maxOutputTokens,
         response_format: { type: "json_object" },
+        ...(this.config.judge.chatTemplateKwargs
+          ? { chat_template_kwargs: this.config.judge.chatTemplateKwargs }
+          : {}),
         messages: [
           {
             role: "system",
@@ -274,16 +591,44 @@ export class JudgeClient {
 
           let parsed: unknown;
           try {
-            parsed = JSON.parse(assistantText);
+            parsed = parseJudgeAssistantJson(assistantText);
           } catch {
-            try {
-              parsed = extractJsonObject(assistantText);
-            } catch {
-              console.error(
-                `[judge-client] model=${model} attempt ${attempt} judge output not valid JSON: ${sanitize(assistantText.slice(0, 500), apiKey)}`,
-              );
-              return malformedJudgeResponse(assistantText, "invalid JSON");
+            console.error(
+              `[judge-client] model=${model} attempt ${attempt} judge output not valid JSON: ${sanitize(assistantText.slice(0, 500), apiKey)}`,
+            );
+            lastMalformedJudgeResponse = { raw: assistantText, reason: "invalid JSON" };
+            if (attempt < totalAttempts) {
+              const delayMs = 1000 * 2 ** (attempt - 1);
+              console.log(`[judge-client] model=${model} will retry malformed judge JSON in ${delayMs}ms (${totalAttempts - attempt} left)...`);
+              await sleep(delayMs);
+              continue;
             }
+            if (!isLastModel) {
+              console.warn("[judge-client] switching to fallback model after malformed judge JSON");
+              break;
+            }
+            return malformedJudgeResponse(assistantText, "invalid JSON");
+          }
+
+          if (!hasUsableJudgeFields(parsed)) {
+            console.error(
+              `[judge-client] model=${model} attempt ${attempt} judge JSON missing required fields: ${sanitize(assistantText.slice(0, 500), apiKey)}`,
+            );
+            lastMalformedJudgeResponse = {
+              raw: assistantText,
+              reason: "missing required judge fields",
+            };
+            if (attempt < totalAttempts) {
+              const delayMs = 1000 * 2 ** (attempt - 1);
+              console.log(`[judge-client] model=${model} will retry incomplete judge JSON in ${delayMs}ms (${totalAttempts - attempt} left)...`);
+              await sleep(delayMs);
+              continue;
+            }
+            if (!isLastModel) {
+              console.warn("[judge-client] switching to fallback model after incomplete judge JSON");
+              break;
+            }
+            return malformedJudgeResponse(assistantText, "missing required judge fields");
           }
 
           return validateJudgeResponse(parsed, {
@@ -321,6 +666,13 @@ export class JudgeClient {
         continue;
       }
       throw toUpstreamError(lastError);
+    }
+
+    if (lastMalformedJudgeResponse) {
+      return malformedJudgeResponse(
+        lastMalformedJudgeResponse.raw,
+        lastMalformedJudgeResponse.reason,
+      );
     }
 
     throw new JudgeUpstreamError("Exhausted judge models without a valid response.", 502);
