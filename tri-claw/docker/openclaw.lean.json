@@ -1,5 +1,5 @@
 {
-  "version": "2.0.26",
+  "version": "2.0.27",
   "gateway": {
     "mode": "local",
     "port": 18789,
@@ -30,12 +30,12 @@
       "workspace": "/home/node/.openclaw/workspace",
       "timeoutSeconds": 370,
       "model": {
-        "primary": "chutes/Qwen/Qwen3.6-27B-TEE"
+        "primary": "chutes/Qwen/Qwen3.8-27B-TEE"
       },
       "models": {
-        "chutes-default": { "alias": "chutes/Qwen/Qwen3.6-27B-TEE" },
+        "chutes-default": { "alias": "chutes/Qwen/Qwen3.8-27B-TEE" },
         "openrouter-default": { "alias": "openrouter/qwen/qwen3-32b" },
-        "chutes/Qwen/Qwen3.6-27B-TEE": {
+        "chutes/Qwen/Qwen3.8-27B-TEE": {
           "params": {
             "enable_thinking": false
           }
@@ -119,8 +119,8 @@
         "auth": "api-key",
         "models": [
           {
-            "id": "Qwen/Qwen3.6-27B-TEE",
-            "name": "Chutes Qwen3.6-27B-TEE",
+            "id": "Qwen/Qwen3.8-27B-TEE",
+            "name": "Chutes Qwen3.8-27B-TEE",
             "reasoning": false,
             "input": ["text"],
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
