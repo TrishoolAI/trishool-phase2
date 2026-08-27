@@ -32,6 +32,7 @@ export type AppConfig = {
     model: string;
     models: string[];
     chatTemplateKwargs?: Record<string, unknown>;
+    enableThinking?: boolean;
     timeoutMs: number;
     maxRetries: number;
     temperature?: number;
