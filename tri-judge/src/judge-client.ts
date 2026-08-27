@@ -488,6 +488,28 @@ function truncateDetail(text: string, maxChars: number): string {
   return `${t.slice(0, maxChars)}…`;
 }
 
+/** Dual-write top-level enable_thinking and nested chat_template_kwargs for Chutes/Qwen. */
+function resolveThinkingBodyFields(judge: AppConfig["judge"]): {
+  enable_thinking?: boolean;
+  chat_template_kwargs?: Record<string, unknown>;
+} {
+  const kwargs = judge.chatTemplateKwargs ? { ...judge.chatTemplateKwargs } : undefined;
+  const fromKwargs = kwargs && typeof kwargs.enable_thinking === "boolean" ? kwargs.enable_thinking : undefined;
+  const enableThinking = typeof judge.enableThinking === "boolean" ? judge.enableThinking : fromKwargs;
+  if (enableThinking === undefined && !kwargs) {
+    return {};
+  }
+  const chatTemplateKwargs =
+    kwargs ?? (enableThinking !== undefined ? { enable_thinking: enableThinking } : undefined);
+  if (chatTemplateKwargs && typeof chatTemplateKwargs.enable_thinking !== "boolean" && enableThinking !== undefined) {
+    chatTemplateKwargs.enable_thinking = enableThinking;
+  }
+  return {
+    ...(enableThinking !== undefined ? { enable_thinking: enableThinking } : {}),
+    ...(chatTemplateKwargs ? { chat_template_kwargs: chatTemplateKwargs } : {}),
+  };
+}
+
 export class JudgeClient {
   constructor(
     private readonly config: AppConfig,
@@ -514,9 +536,7 @@ export class JudgeClient {
         temperature: this.config.judge.temperature ?? 0,
         max_tokens: this.config.judge.maxOutputTokens,
         response_format: { type: "json_object" },
-        ...(this.config.judge.chatTemplateKwargs
-          ? { chat_template_kwargs: this.config.judge.chatTemplateKwargs }
-          : {}),
+        ...resolveThinkingBodyFields(this.config.judge),
         messages: [
           {
             role: "system",
