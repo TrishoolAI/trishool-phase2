@@ -1,5 +1,5 @@
 {
-  "version": "2.0.27",
+  "version": "2.0.28",
   "gateway": {
     "mode": "local",
     "port": 18789,
@@ -37,7 +37,8 @@
         "openrouter-default": { "alias": "openrouter/qwen/qwen3-32b" },
         "chutes/Qwen/Qwen3.8-27B-TEE": {
           "params": {
-            "enable_thinking": false
+            "enable_thinking": false,
+            "chat_template_kwargs": { "enable_thinking": false }
           }
         }
       },

@@ -210,6 +210,7 @@ describe("createApp", () => {
         ...config.judge,
         baseURL: upstream.url,
         chatTemplateKwargs: { enable_thinking: false },
+        enableThinking: false,
       },
     });
 
@@ -223,6 +224,7 @@ describe("createApp", () => {
     expect(response.statusCode).toBe(200);
     expect(capturedBody).not.toBeNull();
     expect(capturedBody?.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect(capturedBody?.enable_thinking).toBe(false);
 
     await app.close();
     await upstream.close();

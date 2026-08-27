@@ -171,4 +171,71 @@ describe("extra-params: Chutes non-stream wrapper", () => {
 
     vi.unstubAllGlobals();
   });
+
+  it("dual-writes enable_thinking and chat_template_kwargs onto Chutes payloads", async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}"));
+      expect(body.enable_thinking).toBe(false);
+      expect(body.chat_template_kwargs).toEqual({ enable_thinking: false });
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            choices: [
+              {
+                finish_reason: "stop",
+                message: { content: "PONG" },
+              },
+            ],
+          }),
+      } as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const agent: { streamFn?: StreamFn } = {};
+    applyExtraParamsToAgent(
+      agent,
+      {
+        agents: {
+          defaults: {
+            models: {
+              "chutes/Qwen/Qwen3.8-27B-TEE": {
+                params: {
+                  enable_thinking: false,
+                  chat_template_kwargs: { enable_thinking: false },
+                },
+              },
+            },
+          },
+        },
+      },
+      "chutes",
+      "Qwen/Qwen3.8-27B-TEE",
+    );
+
+    const model = {
+      api: "openai-completions",
+      provider: "chutes",
+      id: "Qwen/Qwen3.8-27B-TEE",
+      name: "Qwen",
+      baseUrl: "https://llm.chutes.ai/v1",
+      reasoning: false,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 256000,
+      maxTokens: 16384,
+    } as Model<"openai-completions">;
+    const context = {
+      messages: [{ role: "user", content: "PONG", timestamp: Date.now() }],
+    } as unknown as Context;
+
+    const stream = await agent.streamFn?.(model, context, { apiKey: "test-key" });
+    const result = await stream?.result();
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(result?.stopReason).toBe("stop");
+
+    vi.unstubAllGlobals();
+  });
 });

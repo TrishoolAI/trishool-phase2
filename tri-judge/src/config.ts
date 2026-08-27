@@ -61,11 +61,23 @@ function optionalRecord(record: Record<string, unknown>, field: string, ctx: str
   return value;
 }
 
+function optionalBoolean(record: Record<string, unknown>, field: string, ctx: string): boolean | undefined {
+  const value = record[field];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "boolean") {
+    throw new ConfigError(`Missing or invalid ${ctx}.${field}.`);
+  }
+  return value;
+}
+
 /** Legacy flat `judge.baseURL` / `judge.models`, or `judge.provider` + `judge.providers.<id>`. */
 function resolveJudgeUpstream(judge: Record<string, unknown>): {
   baseURL: string;
   modelChain: string[];
   chatTemplateKwargs?: Record<string, unknown>;
+  enableThinking?: boolean;
 } {
   const providersRaw = judge.providers;
   if (providersRaw === undefined) {
@@ -73,6 +85,7 @@ function resolveJudgeUpstream(judge: Record<string, unknown>): {
       baseURL: requireString(judge, "baseURL", "judge"),
       modelChain: parseModelChain(judge, "judge"),
       chatTemplateKwargs: optionalRecord(judge, "chatTemplateKwargs", "judge"),
+      enableThinking: optionalBoolean(judge, "enableThinking", "judge"),
     };
   }
   if (!isRecord(providersRaw)) {
@@ -91,6 +104,9 @@ function resolveJudgeUpstream(judge: Record<string, unknown>): {
     chatTemplateKwargs:
       optionalRecord(branch, "chatTemplateKwargs", ctx) ??
       optionalRecord(judge, "chatTemplateKwargs", "judge"),
+    enableThinking:
+      optionalBoolean(branch, "enableThinking", ctx) ??
+      optionalBoolean(judge, "enableThinking", "judge"),
   };
 }
 
@@ -150,6 +166,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       models: modelChain,
       model: modelChain[0],
       chatTemplateKwargs: upstream.chatTemplateKwargs,
+      enableThinking: upstream.enableThinking,
       timeoutMs: requireNumber(judge, "timeoutMs", "judge"),
       maxRetries: requireNumber(judge, "maxRetries", "judge"),
       temperature:

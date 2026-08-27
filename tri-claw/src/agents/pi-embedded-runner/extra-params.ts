@@ -635,13 +635,46 @@ function createZaiToolStreamWrapper(
 }
 
 /**
- * Inject `enable_thinking` into Chutes payloads.
- * Qwen3 TEE models think by default; pass false to disable, true to force-enable.
- * Configurable via `agents.defaults.models["chutes/<modelId>"].params.enable_thinking`.
+ * Inject thinking-off flags into Chutes payloads.
+ * Qwen3 TEE models think by default. Chutes/vLLM honor nested
+ * `chat_template_kwargs.enable_thinking`; some paths also read top-level
+ * `enable_thinking`. Dual-write both. Configurable via
+ * `agents.defaults.models["chutes/<modelId>"].params`.
  */
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function resolveChutesThinkingInjection(extraParams: Record<string, unknown> | undefined): {
+  enableThinking?: boolean;
+  chatTemplateKwargs?: Record<string, unknown>;
+} {
+  const fromBool =
+    typeof extraParams?.enable_thinking === "boolean" ? extraParams.enable_thinking : undefined;
+  const rawKwargs = extraParams?.chat_template_kwargs;
+  const kwargs = isPlainRecord(rawKwargs) ? { ...rawKwargs } : undefined;
+  const fromKwargs =
+    kwargs && typeof kwargs.enable_thinking === "boolean" ? kwargs.enable_thinking : undefined;
+  const enableThinking = fromBool ?? fromKwargs;
+  if (enableThinking === undefined && !kwargs) {
+    return {};
+  }
+  const chatTemplateKwargs =
+    kwargs ?? (enableThinking !== undefined ? { enable_thinking: enableThinking } : undefined);
+  if (
+    chatTemplateKwargs &&
+    typeof chatTemplateKwargs.enable_thinking !== "boolean" &&
+    enableThinking !== undefined
+  ) {
+    chatTemplateKwargs.enable_thinking = enableThinking;
+  }
+  return { enableThinking, chatTemplateKwargs };
+}
+
 function createChutesThinkingWrapper(
   baseStreamFn: StreamFn | undefined,
-  enableThinking: boolean,
+  enableThinking: boolean | undefined,
+  chatTemplateKwargs: Record<string, unknown> | undefined,
 ): StreamFn {
   const underlying = baseStreamFn ?? streamSimple;
   return (model, context, options) => {
@@ -653,7 +686,16 @@ function createChutesThinkingWrapper(
       ...options,
       onPayload: (payload) => {
         if (payload && typeof payload === "object") {
-          (payload as Record<string, unknown>).enable_thinking = enableThinking;
+          const next = payload as Record<string, unknown>;
+          if (typeof enableThinking === "boolean") {
+            next.enable_thinking = enableThinking;
+          }
+          if (chatTemplateKwargs) {
+            const existing = isPlainRecord(next.chat_template_kwargs)
+              ? next.chat_template_kwargs
+              : {};
+            next.chat_template_kwargs = { ...existing, ...chatTemplateKwargs };
+          }
         }
         originalOnPayload?.(payload);
       },
@@ -1135,10 +1177,13 @@ export function applyExtraParamsToAgent(
   if (provider === "chutes") {
     const toolChoiceOverride = merged?.toolChoice as string | undefined;
     agent.streamFn = createChutesNonStreamingWrapper(agent.streamFn, toolChoiceOverride ?? "auto");
-    // Inject enable_thinking when explicitly configured in agents.defaults.models params.
-    const enableThinking = merged?.enable_thinking;
-    if (typeof enableThinking === "boolean") {
-      agent.streamFn = createChutesThinkingWrapper(agent.streamFn, enableThinking);
+    const chutesThinking = resolveChutesThinkingInjection(merged);
+    if (typeof chutesThinking.enableThinking === "boolean" || chutesThinking.chatTemplateKwargs) {
+      agent.streamFn = createChutesThinkingWrapper(
+        agent.streamFn,
+        chutesThinking.enableThinking,
+        chutesThinking.chatTemplateKwargs,
+      );
     }
   }
 
