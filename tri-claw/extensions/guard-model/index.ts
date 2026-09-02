@@ -549,8 +549,9 @@ function parseChutesClassifyResponse(json: unknown): GuardDecision {
   ) {
     return { decision: "allow", reason: category || reason || statusRaw.toLowerCase() };
   }
-  // Fallback: some deploy variants put the tier only on safety_label / risk_level.
+  // Fallback: some deploy variants put the tier only on safety / safety_label / risk_level.
   const tierRaw =
+    (typeof json.safety === "string" ? json.safety : undefined) ??
     (typeof json.safety_label === "string" ? json.safety_label : undefined) ??
     (typeof json.risk_level === "string" ? json.risk_level : undefined);
   const tier = typeof tierRaw === "string" ? tierRaw.trim().toLowerCase() : "";
