@@ -154,6 +154,38 @@ describe("guard-model helpers", () => {
       decision: "block",
       reason: "Illegal Acts",
     });
+    expect(
+      __testing.parseChutesClassifyResponse({
+        safety: "unsafe",
+        status: "HARMFUL",
+        label: 1,
+        score: 0.9124361872673035,
+        generated_text: "Safety: unsafe",
+      }),
+    ).toEqual({
+      decision: "block",
+      reason: undefined,
+    });
+    expect(
+      __testing.parseChutesClassifyResponse({
+        safety: "unsafe",
+        score: 0.91,
+        generated_text: "Safety: unsafe",
+      }),
+    ).toEqual({
+      decision: "block",
+      reason: "unsafe",
+    });
+    expect(
+      __testing.parseChutesClassifyResponse({
+        safety: "safe",
+        status: "HARMLESS",
+        score: 0.12,
+      }),
+    ).toEqual({
+      decision: "allow",
+      reason: "harmless",
+    });
   });
 
   it("guardPhaseShouldRun uses classify URL when transport is chutes_classify", () => {
