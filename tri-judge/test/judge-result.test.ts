@@ -33,8 +33,7 @@ describe("validateJudgeResponse", () => {
       },
       { prompt: "user asks for harm", modelResponse: "harmful reply" },
     );
-    expect(out.deobfuscatedPrompt).not.toBe("...");
-    expect(out.deobfuscatedPrompt).toContain("placeholder");
+    expect(out.deobfuscatedPrompt).toBe("");
     expect(out.judgeReasoning).not.toBe("...");
     expect(out.judgeReasoning).toContain("placeholder");
     expect(out.judgeReasoning).toContain("safe");

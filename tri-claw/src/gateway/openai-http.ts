@@ -21,6 +21,7 @@ import { handleGatewayPostJsonEndpoint } from "./http-endpoint-helpers.js";
 import { loadConfig } from "../config/config.js";
 import { resolveAgentIdForRequest, resolveSessionKey } from "./http-utils.js";
 import type { ResolvedGatewayChatCompletionsStateless } from "./chat-completions-stateless.js";
+import { formatGuardRunAudit, takeGuardRunAudit } from "../agents/guard-run-audit.js";
 import { collectGuardRefusalPrefixes, isGuardPolicyRefusalText } from "./openai-http-guard-refusal.js";
 import type { GuardClassifyHttpOverrides } from "../plugins/types.js";
 
@@ -311,6 +312,13 @@ function coerceRequest(val: unknown): OpenAiChatCompletionRequest {
   return val as OpenAiChatCompletionRequest;
 }
 
+function withGuardAudit<T extends Record<string, unknown>>(body: T, runId: string): T & { deobfuscatedPrompt: string } {
+  return {
+    ...body,
+    deobfuscatedPrompt: formatGuardRunAudit(takeGuardRunAudit(runId)),
+  };
+}
+
 function resolveAgentResponseText(result: unknown): string {
   const typed = result as {
     payloads?: Array<{ text?: string; isError?: boolean }>;
@@ -425,7 +433,7 @@ export async function handleOpenAiHttpRequest(
 
       const content = resolveAgentResponseText(result);
 
-      sendJson(res, 200, {
+      sendJson(res, 200, withGuardAudit({
         id: runId,
         object: "chat.completion",
         created: Math.floor(Date.now() / 1000),
@@ -438,13 +446,13 @@ export async function handleOpenAiHttpRequest(
           },
         ],
         usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
-      });
+      }, runId));
     } catch (err) {
       logWarn(`openai-compat: chat completion failed: ${String(err)}`);
       const message = err instanceof Error ? err.message : String(err);
       const refusalPrefixes = collectGuardRefusalPrefixes(loadConfig());
       if (isGuardPolicyRefusalText(message, refusalPrefixes)) {
-        sendJson(res, 200, {
+        sendJson(res, 200, withGuardAudit({
           id: runId,
           object: "chat.completion",
           created: Math.floor(Date.now() / 1000),
@@ -457,9 +465,10 @@ export async function handleOpenAiHttpRequest(
             },
           ],
           usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
-        });
+        }, runId));
         return true;
       }
+      takeGuardRunAudit(runId);
       sendJson(res, 502, {
         error: {
           message: message || "bad_gateway",
@@ -567,6 +576,7 @@ export async function handleOpenAiHttpRequest(
         data: { phase: "error" },
       });
     } finally {
+      takeGuardRunAudit(runId);
       if (!closed) {
         closed = true;
         unsubscribe();

@@ -222,10 +222,12 @@ export function validateJudgeResponse(
     );
   }
 
+  // Guard audit JSON is written into this field later by the validator. Drop judge prose and placeholders.
+  if (deobfuscatedPrompt.trim().length > 0 && !deobfuscatedPrompt.trim().startsWith("{")) {
+    deobfuscatedPrompt = "";
+  }
   if (isTrivialJudgeText(deobfuscatedPrompt)) {
-    console.warn("[judge-result] deobfuscatedPrompt was placeholder-only; substituting notice");
-    deobfuscatedPrompt =
-      "Judge model returned a placeholder instead of restating user intent; inspect prompt and modelResponse in this response.";
+    deobfuscatedPrompt = "";
   }
   if (isTrivialJudgeText(judgeReasoning)) {
     console.warn("[judge-result] judgeReasoning was placeholder-only; substituting notice");
