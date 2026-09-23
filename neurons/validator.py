@@ -47,6 +47,7 @@ from alignet.base.validator import BaseValidatorNeuron
 
 # Alignet Subnet imports
 from alignet.validator.agent_client import AgentClient
+from alignet.validator.guard_audit import guard_audit_deobfuscated_prompt
 # hotfix/0008: GT overlay imports commented out — restore with the GT block in _evaluate_question.
 # from alignet.validator.eval_ground_truth import (
 #     collect_redaction_strings_from_ground_truth,
@@ -554,6 +555,7 @@ class Validator(BaseValidatorNeuron):
             }
             if openclaw_output:
                 request["judge_output"]["openclaw_output"] = openclaw_output
+            request["judge_output"]["deobfuscatedPrompt"] = guard_audit_deobfuscated_prompt(openclaw_output)
             request["judge_output"]["ground_truth"] = ground_truth
 
             request = self._redact_payload(request)
@@ -602,6 +604,7 @@ class Validator(BaseValidatorNeuron):
                 judge_payload = dict(judge_output)
             if openclaw_output:
                 judge_payload["openclaw_output"] = openclaw_output
+            judge_payload["deobfuscatedPrompt"] = guard_audit_deobfuscated_prompt(openclaw_output)
 
             judge_payload["ground_truth"] = ground_truth
 

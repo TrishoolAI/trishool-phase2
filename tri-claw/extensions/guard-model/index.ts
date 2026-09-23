@@ -15,6 +15,7 @@ import { getCustomProviderApiKey, resolveEnvApiKey } from "../../src/agents/mode
 import { extractAssistantText } from "../../src/agents/tools/sessions-helpers.js";
 import { resolveModelTarget } from "../../src/commands/models/shared.js";
 import { extractTextFromChatContent } from "../../src/shared/chat-content.js";
+import { recordGuardPhase } from "../../src/agents/guard-run-audit.js";
 import { SuppressModelFallbackError } from "../../src/agents/suppress-model-fallback-error.js";
 import { safeJsonStringify } from "../../src/utils/safe-json.js";
 
@@ -78,6 +79,10 @@ type GuardPluginConfig = {
 type GuardDecision = {
   decision: "allow" | "block";
   reason?: string;
+  /** Primary guard score when the classifier returns one (`unsafe_prob`, else `score`, else `confidence`). */
+  probability?: number;
+  /** Calibrated unsafe probability when Halo returns `unsafe_prob_calibrated`. */
+  probabilityCalibrated?: number;
 };
 
 /** TCP/DNS/TLS/timeout: guard service could not be reached; always fail the request. */
@@ -527,6 +532,29 @@ function buildClassifyQueryString(params: {
   return truncateForGuard(fallback, params.maxChars);
 }
 
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/** Prefer the score the classifier actually thresholded, then any other probability it returned. */
+function readGuardProbability(json: Record<string, unknown>): number | undefined {
+  return (
+    finiteNumber(json.unsafe_prob) ??
+    finiteNumber(json.score) ??
+    finiteNumber(json.confidence)
+  );
+}
+
+function withGuardProbability(decision: GuardDecision, json: Record<string, unknown>): GuardDecision {
+  const probability = readGuardProbability(json);
+  const probabilityCalibrated = finiteNumber(json.unsafe_prob_calibrated);
+  return {
+    ...decision,
+    ...(probability !== undefined ? { probability } : {}),
+    ...(probabilityCalibrated !== undefined ? { probabilityCalibrated } : {}),
+  };
+}
+
 /** Map Halo-style /v1/classify JSON body to allow/block (status-driven). */
 function parseChutesClassifyResponse(json: unknown): GuardDecision {
   if (!isRecord(json)) {
@@ -538,8 +566,9 @@ function parseChutesClassifyResponse(json: unknown): GuardDecision {
     typeof json.attack_overlay === "string" ? json.attack_overlay.trim() : "";
   const reasonParts = [category, attackOverlay].filter(Boolean);
   const reason = reasonParts.length > 0 ? reasonParts.join("; ") : undefined;
+  const finish = (decision: GuardDecision) => withGuardProbability(decision, json);
   if (statusRaw === "HARMFUL") {
-    return { decision: "block", reason };
+    return finish({ decision: "block", reason });
   }
   // HaloQwen output guard may emit CONTROVERSIAL / SENSITIVE (non-block tiers).
   if (
@@ -547,7 +576,7 @@ function parseChutesClassifyResponse(json: unknown): GuardDecision {
     statusRaw === "CONTROVERSIAL" ||
     statusRaw === "SENSITIVE"
   ) {
-    return { decision: "allow", reason: category || reason || statusRaw.toLowerCase() };
+    return finish({ decision: "allow", reason: category || reason || statusRaw.toLowerCase() });
   }
   // Fallback: some deploy variants put the tier only on safety / safety_label / risk_level.
   const tierRaw =
@@ -556,10 +585,10 @@ function parseChutesClassifyResponse(json: unknown): GuardDecision {
     (typeof json.risk_level === "string" ? json.risk_level : undefined);
   const tier = typeof tierRaw === "string" ? tierRaw.trim().toLowerCase() : "";
   if (tier === "unsafe") {
-    return { decision: "block", reason: reason || tierRaw };
+    return finish({ decision: "block", reason: reason || tierRaw });
   }
   if (tier === "safe" || tier === "controversial" || tier === "sensitive") {
-    return { decision: "allow", reason: category || reason || tier };
+    return finish({ decision: "allow", reason: category || reason || tier });
   }
   throw new Error(`classify response missing or unknown status: ${statusRaw || "(empty)"}`);
 }
@@ -802,6 +831,49 @@ async function runGuardCheck(params: {
   }
 }
 
+function auditFromDecision(decision: GuardDecision): {
+  ran: true;
+  decision: "allow" | "block";
+  reason?: string;
+  probability?: number;
+  probabilityCalibrated?: number;
+} {
+  return {
+    ran: true,
+    decision: decision.decision,
+    ...(decision.reason ? { reason: decision.reason } : {}),
+    ...(decision.probability !== undefined ? { probability: decision.probability } : {}),
+    ...(decision.probabilityCalibrated !== undefined
+      ? { probabilityCalibrated: decision.probabilityCalibrated }
+      : {}),
+  };
+}
+
+async function runAuditedGuardCheck(params: {
+  api: OpenClawPluginApi;
+  openClawConfig?: OpenClawConfig;
+  phase: "input" | "output";
+  provider: string;
+  model: string;
+  payload: unknown;
+  guardClassifyOverrides?: GuardClassifyHttpOverrides;
+  runId?: string;
+}): Promise<GuardDecision> {
+  try {
+    const decision = await runGuardCheckSafe(params);
+    recordGuardPhase(params.runId, params.phase, auditFromDecision(decision));
+    return decision;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    recordGuardPhase(params.runId, params.phase, {
+      ran: true,
+      decision: "error",
+      reason: message.trim() || "guard check failed",
+    });
+    throw error;
+  }
+}
+
 async function runGuardCheckSafe(params: {
   api: OpenClawPluginApi;
   openClawConfig?: OpenClawConfig;
@@ -926,7 +998,13 @@ export default function register(api: OpenClawPluginApi) {
     const guardClassifyOverrides = event.guardClassifyOverrides;
     const wrapped = ((model, context, options) => {
       const liveCfg = loadLiveGuardConfig(api, mergedOpenClawConfig);
-      if ((ctx.sessionId ?? "").startsWith(GUARD_SESSION_PREFIX) || liveCfg.enabled === false) {
+      const guardRunId = event.runId;
+      if ((ctx.sessionId ?? "").startsWith(GUARD_SESSION_PREFIX)) {
+        return event.streamFn(model, context, options);
+      }
+      if (liveCfg.enabled === false) {
+        recordGuardPhase(guardRunId, "input", { ran: false, skipped: "guard_disabled" });
+        recordGuardPhase(guardRunId, "output", { ran: false, skipped: "guard_disabled" });
         return event.streamFn(model, context, options);
       }
 
@@ -941,7 +1019,7 @@ export default function register(api: OpenClawPluginApi) {
       const run = async () => {
         try {
           if (guardPhaseShouldRun(liveCfg, "input")) {
-            const inputDecision = await runGuardCheckSafe({
+            const inputDecision = await runAuditedGuardCheck({
               api,
               openClawConfig: mergedOpenClawConfig,
               phase: "input",
@@ -952,12 +1030,16 @@ export default function register(api: OpenClawPluginApi) {
                 ...buildInputGuardPayload(context, inputScope.payloadMode ?? "full_context"),
               },
               guardClassifyOverrides,
+              runId: guardRunId,
             });
             if (inputDecision.decision === "block") {
+              recordGuardPhase(guardRunId, "output", { ran: false, skipped: "input_blocked" });
               throw new SuppressModelFallbackError(
                 buildBlockErrorMessage(liveCfg, inputDecision.reason, "input"),
               );
             }
+          } else {
+            recordGuardPhase(guardRunId, "input", { ran: false, skipped: "input_disabled" });
           }
 
           const inner = await event.streamFn(model, context, options);
@@ -966,6 +1048,7 @@ export default function register(api: OpenClawPluginApi) {
           }
 
           if (!guardPhaseShouldRun(liveCfg, "output")) {
+            recordGuardPhase(guardRunId, "output", { ran: false, skipped: "output_disabled" });
             for await (const item of inner) {
               stream.push(item as AssistantMessageEvent);
             }
@@ -986,7 +1069,7 @@ export default function register(api: OpenClawPluginApi) {
           }
 
           if (lastAssistantText.trim()) {
-            const outputDecision = await runGuardCheckSafe({
+            const outputDecision = await runAuditedGuardCheck({
               api,
               openClawConfig: mergedOpenClawConfig,
               phase: "output",
@@ -997,12 +1080,15 @@ export default function register(api: OpenClawPluginApi) {
                 assistantText: lastAssistantText,
               },
               guardClassifyOverrides,
+              runId: guardRunId,
             });
             if (outputDecision.decision === "block") {
               throw new SuppressModelFallbackError(
                 buildBlockErrorMessage(liveCfg, outputDecision.reason, "output"),
               );
             }
+          } else {
+            recordGuardPhase(guardRunId, "output", { ran: false, skipped: "empty_assistant" });
           }
 
           for (const item of bufferedEvents) {
