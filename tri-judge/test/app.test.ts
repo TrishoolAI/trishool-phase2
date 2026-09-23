@@ -131,7 +131,7 @@ describe("createApp", () => {
               message: {
                 content: JSON.stringify({
                   prompt: "Original prompt",
-                  deobfuscatedPrompt: "Restated intent",
+                  deobfuscatedPrompt: "",
                   modelResponse: "Model output",
                   toolCalls: [{ name: "search" }],
                   judgeReasoning: "The response partially deviates from the expected output.",
@@ -160,7 +160,7 @@ describe("createApp", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       prompt: "Original prompt",
-      deobfuscatedPrompt: "Restated intent",
+      deobfuscatedPrompt: "",
       modelResponse: "Model output",
       toolCalls: [{ name: "search" }],
       judgeReasoning: "The response partially deviates from the expected output.",
@@ -189,7 +189,7 @@ describe("createApp", () => {
                 message: {
                   content: JSON.stringify({
                     prompt: "",
-                    deobfuscatedPrompt: "Restated intent",
+                    deobfuscatedPrompt: "",
                     modelResponse: "",
                     toolCalls: [],
                     judgeReasoning: "The model returned a safe response.",
@@ -240,7 +240,7 @@ describe("createApp", () => {
               message: {
                 content: JSON.stringify({
                   prompt: "Original prompt",
-                  deobfuscatedPrompt: "Restated intent",
+                  deobfuscatedPrompt: "",
                   modelResponse: "Model output",
                   toolCalls: [{ name: "search" }],
                   judgeReasoning: "The response partially deviates from the expected output.",
@@ -269,7 +269,7 @@ describe("createApp", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       prompt: "Original prompt",
-      deobfuscatedPrompt: "Restated intent",
+      deobfuscatedPrompt: "",
       modelResponse: "Model output",
       toolCalls: [{ name: "search" }],
       judgeReasoning: "The response partially deviates from the expected output.",
@@ -420,7 +420,7 @@ describe("createApp", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       prompt: "Original prompt",
-      deobfuscatedPrompt: "Restated intent",
+      deobfuscatedPrompt: "",
       modelResponse: "Model output",
       toolCalls: [],
       judgeReasoning: "The response refuses the unsafe request.",
@@ -447,7 +447,7 @@ describe("createApp", () => {
                     ? "{not-json"
                     : JSON.stringify({
                         prompt: "",
-                        deobfuscatedPrompt: "Restated intent",
+                        deobfuscatedPrompt: "",
                         modelResponse: "",
                         toolCalls: [],
                         judgeReasoning: "The second attempt returned valid JSON.",
@@ -477,7 +477,7 @@ describe("createApp", () => {
     expect(calls).toBe(2);
     expect(response.json()).toEqual({
       prompt: "Original prompt",
-      deobfuscatedPrompt: "Restated intent",
+      deobfuscatedPrompt: "",
       modelResponse: "Model output",
       toolCalls: [],
       judgeReasoning: "The second attempt returned valid JSON.",
@@ -504,7 +504,7 @@ describe("createApp", () => {
                     ? JSON.stringify({ prompt: "", modelResponse: "", toolCalls: [] })
                     : JSON.stringify({
                         prompt: "",
-                        deobfuscatedPrompt: "Restated intent",
+                        deobfuscatedPrompt: "",
                         modelResponse: "",
                         toolCalls: [],
                         judgeReasoning: "The second attempt returned complete judge fields.",
@@ -534,7 +534,7 @@ describe("createApp", () => {
     expect(calls).toBe(2);
     expect(response.json()).toEqual({
       prompt: "Original prompt",
-      deobfuscatedPrompt: "Restated intent",
+      deobfuscatedPrompt: "",
       modelResponse: "Model output",
       toolCalls: [],
       judgeReasoning: "The second attempt returned complete judge fields.",
@@ -564,7 +564,7 @@ describe("createApp", () => {
                 message: {
                   content: JSON.stringify({
                     prompt: "",
-                    deobfuscatedPrompt: "Restated intent",
+                    deobfuscatedPrompt: "",
                     modelResponse: "",
                     toolCalls: [],
                     judgeReasoning: "The model refused. No harmful content.",
@@ -621,7 +621,7 @@ describe("createApp", () => {
               message: {
                 content: JSON.stringify({
                   prompt: "Original prompt",
-                  deobfuscatedPrompt: "Restated intent",
+                  deobfuscatedPrompt: "",
                   modelResponse: "Model output",
                   toolCalls: [],
                   judgeReasoning: "reason",
