@@ -507,7 +507,8 @@ function buildClassifyQueryString(params: {
     const text =
       typeof params.payload.assistantText === "string" ? params.payload.assistantText.trim() : "";
     if (text) {
-      return truncateForGuard(text, params.maxChars);
+      const userText = typeof params.payload.userText === "string" ? params.payload.userText.trim() : "";
+      return truncateForGuard(formatOutputGuardQuery(userText, text), params.maxChars);
     }
   }
   if (params.phase === "input" && isRecord(params.payload)) {
@@ -660,6 +661,23 @@ async function runChutesClassifyGuardCheck(params: {
     throw new Error(`classify response is not JSON: ${text.slice(0, 120)}`);
   }
   return parseChutesClassifyResponse(parsed);
+}
+
+function latestUserTextFromContext(context: unknown): string {
+  if (!isRecord(context)) {
+    return "";
+  }
+  const messages = Array.isArray(context.messages) ? context.messages : [];
+  const lastUser = [...messages].reverse().find((message) => isRecord(message) && message.role === "user");
+  return plainTextFromUserLikeMessage(lastUser);
+}
+
+/** Output classify sees the user turn and the assistant reply, not the reply alone. */
+function formatOutputGuardQuery(userText: string, assistantText: string): string {
+  if (!userText) {
+    return assistantText;
+  }
+  return `USER:\n${userText}\n\nASSISTANT:\n${assistantText}`;
 }
 
 function buildInputGuardPayload(
@@ -1077,6 +1095,7 @@ export default function register(api: OpenClawPluginApi) {
               model: modelId,
               payload: {
                 model: { provider, id: modelId, api: modelApi ?? null },
+                userText: latestUserTextFromContext(context),
                 assistantText: lastAssistantText,
               },
               guardClassifyOverrides,
