@@ -280,6 +280,17 @@ describe("guard-model helpers", () => {
     ).toBe("hello world");
   });
 
+  it("buildClassifyQueryString text_extract pairs the user prompt with the assistant reply", () => {
+    expect(
+      __testing.buildClassifyQueryString({
+        phase: "output",
+        payload: { userText: "sell fake credits", assistantText: "statutes\nlabel" },
+        queryMode: "text_extract",
+        maxChars: 1000,
+      }),
+    ).toBe("USER:\nsell fake credits\n\nASSISTANT:\nstatutes\nlabel");
+  });
+
   it("buildClassifyQueryString text_extract uses latest user text for input", () => {
     expect(
       __testing.buildClassifyQueryString({
