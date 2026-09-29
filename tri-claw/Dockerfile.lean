@@ -14,14 +14,13 @@ RUN corepack enable
 WORKDIR /app
 RUN chown node:node /app
 
-COPY --chown=node:node package.json pnpm-workspace.yaml .npmrc ./
-# pnpm-lock.yaml is gitignored; copy it only when present (dev builds skip --frozen-lockfile)
+COPY --chown=node:node package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY --chown=node:node ui/package.json ./ui/package.json
 COPY --chown=node:node patches ./patches
 COPY --chown=node:node scripts ./scripts
 
 USER node
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 USER node
 COPY --chown=node:node . .
